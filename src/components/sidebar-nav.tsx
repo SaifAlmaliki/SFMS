@@ -9,6 +9,8 @@ import {
   Settings,
   Bot,
   Flame,
+  Wrench,
+  BarChart,
 } from 'lucide-react';
 import {
   SidebarHeader,
@@ -70,10 +72,26 @@ export function SidebarNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname === '/ai-tools'} tooltip="AI Tools">
+            <SidebarMenuButton asChild isActive={pathname.startsWith('/ai-tools')} tooltip="AI Tools">
               <Link href="/ai-tools">
                 <Bot />
                 AI Tools
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname === '/reports'} tooltip="Reports">
+              <Link href="/reports">
+                <BarChart />
+                Reports
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname === '/automations'} tooltip="Automations">
+              <Link href="/automations">
+                <Wrench />
+                Automations
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
