@@ -9,6 +9,10 @@ import { detectAdminAnomalies } from '@/ai/flows/detect-admin-anomalies';
 import { addPolicy, deletePolicy, updatePolicy, rollbackSnapshot } from '@/lib/data';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { validateFirewallPolicy } from '@/ai/flows/validate-firewall-policy';
+import { simulatePolicy } from '@/ai/flows/simulate-policy';
+import { emulateAdversary } from '@/ai/flows/emulate-adversary';
+import { createIncident } from '@/ai/flows/create-incident';
 
 const policySchema = z.object({
   description: z.string().min(10, 'Please provide a more detailed description.'),
@@ -294,6 +298,118 @@ const modelManagementSchema = z.object({
     } catch (e) {
         return {
             error: 'Failed to rollback snapshot. Please try again.',
+        };
+    }
+}
+
+const validatePolicySchema = z.object({
+    policy: z.string().min(1, 'Policy cannot be empty.'),
+});
+
+export async function validatePolicyAction(prevState: any, formData: FormData) {
+    const validatedFields = validatePolicySchema.safeParse({
+        policy: formData.get('policy'),
+    });
+
+    if (!validatedFields.success) {
+        return {
+            error: validatedFields.error.flatten().fieldErrors,
+        };
+    }
+
+    try {
+        const result = await validateFirewallPolicy(validatedFields.data);
+        return {
+            data: result,
+        };
+    } catch (e) {
+        return {
+            error: { _server: ['Failed to validate policy. Please try again.'] },
+        };
+    }
+}
+
+const simulatePolicySchema = z.object({
+    policySet: z.string().min(1, 'Policy set cannot be empty.'),
+    trafficFlow: z.string().min(1, 'Traffic flow cannot be empty.'),
+});
+
+export async function simulatePolicyAction(prevState: any, formData: FormData) {
+    const validatedFields = simulatePolicySchema.safeParse({
+        policySet: formData.get('policySet'),
+        trafficFlow: formData.get('trafficFlow'),
+    });
+
+    if (!validatedFields.success) {
+        return {
+            error: validatedFields.error.flatten().fieldErrors,
+        };
+    }
+
+    try {
+        const result = await simulatePolicy(validatedFields.data);
+        return {
+            data: result,
+        };
+    } catch (e) {
+        return {
+            error: { _server: ['Failed to simulate policy. Please try again.'] },
+        };
+    }
+}
+
+const emulateAdversarySchema = z.object({
+    policySet: z.string().min(1, 'Policy set cannot be empty.'),
+    attackTechniqueId: z.string().min(1, 'MITRE ATT&CK technique ID cannot be empty.'),
+});
+
+export async function emulateAdversaryAction(prevState: any, formData: FormData) {
+    const validatedFields = emulateAdversarySchema.safeParse({
+        policySet: formData.get('policySet'),
+        attackTechniqueId: formData.get('attackTechniqueId'),
+    });
+
+    if (!validatedFields.success) {
+        return {
+            error: validatedFields.error.flatten().fieldErrors,
+        };
+    }
+
+    try {
+        const result = await emulateAdversary(validatedFields.data);
+        return {
+            data: result,
+        };
+    } catch (e) {
+        return {
+            error: { _server: ['Failed to emulate adversary. Please try again.'] },
+        };
+    }
+}
+
+const createIncidentSchema = z.object({
+    eventDescription: z.string().min(1, 'Event description cannot be empty.'),
+});
+
+export async function createIncidentAction(prevState: any, formData: FormData) {
+    const validatedFields = createIncidentSchema.safeParse({
+        eventDescription: formData.get('eventDescription'),
+    });
+
+    if (!validatedFields.success) {
+        return {
+            error: validatedFields.error.flatten().fieldErrors,
+        };
+    }
+
+    try {
+        const result = await createIncident(validatedFields.data);
+        return {
+            data: result,
+        };
+    } catch (e) {
+        return {
+            error: { _server: ['Failed to create incident. Please try again.'] },
         };
     }
 }

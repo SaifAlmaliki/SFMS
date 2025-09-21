@@ -9,3 +9,7 @@ import '@/ai/flows/summarize-security-events.ts';
 import '@/ai/flows/generate-firewall-policy.ts';
 import '@/ai/flows/detect-admin-anomalies.ts';
 import '@/ai/flows/threat-intelligence.ts';
+import '@/ai/flows/validate-firewall-policy.ts';
+import '@/ai/flows/simulate-policy.ts';
+import '@/ai/flows/emulate-adversary.ts';
+import '@/ai/flows/create-incident.ts';
