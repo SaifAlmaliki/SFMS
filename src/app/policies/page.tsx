@@ -1,3 +1,4 @@
+import { NewPolicyDialog } from '@/components/policies/new-policy-dialog';
 import {
   Card,
   CardContent,
@@ -14,8 +15,6 @@ import {
   TableCell,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { PlusCircle } from 'lucide-react';
 
 const policies = [
   {
@@ -62,10 +61,7 @@ export default function PoliciesPage() {
             Manage and view your firewall policies.
           </p>
         </div>
-        <Button>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          New Policy
-        </Button>
+        <NewPolicyDialog />
       </div>
 
       <Card>
