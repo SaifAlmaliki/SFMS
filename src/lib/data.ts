@@ -11,6 +11,14 @@ export type Policy = {
     status: 'Active' | 'Inactive' | 'Pending Approval';
 };
 
+export type Snapshot = {
+    version: string;
+    comment: string;
+    author: string;
+    date: string;
+    status: 'Live' | 'Archived';
+};
+
 let policies: Policy[] = [
   {
     id: 'POL-001',
@@ -52,6 +60,13 @@ let policies: Policy[] = [
     action: 'Allow',
     status: 'Inactive',
   }
+];
+
+const snapshots: Snapshot[] = [
+    { version: 'v1.2.3', comment: 'Initial deployment after audit.', author: 'Alice', date: '2024-07-28', status: 'Live' },
+    { version: 'v1.2.2', comment: 'Added rule for new staging server.', author: 'Bob', date: '2024-07-25', status: 'Archived' },
+    { version: 'v1.2.1', comment: 'Emergency patch for CVE-2024-XXXX.', author: 'System', date: '2024-07-24', status: 'Archived' },
+    { version: 'v1.2.0', comment: 'Quarterly rule cleanup.', author: 'Alice', date: '2024-07-20', status: 'Archived' },
 ];
 
 const complianceControlData = {
@@ -123,6 +138,10 @@ const recentActivities = [
 
 export function getPolicies() {
     return policies;
+}
+
+export function getSnapshots() {
+    return snapshots;
 }
 
 export function getComplianceReports() {

@@ -14,7 +14,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Bot, ShieldCheck, ShieldAlert, ShieldQuestion, Info, AlertTriangle } from 'lucide-react';
+import { Bot, ShieldCheck, ShieldAlert, ShieldQuestion, Info, AlertTriangle, GitMerge, Fingerprint, LucideIcon } from 'lucide-react';
 import type { ValidateFirewallPolicyOutput } from '@/ai/flows/validate-firewall-policy';
 import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
@@ -42,14 +42,20 @@ const severityStyles: Record<string, string> = {
     'Info': 'bg-gray-500 text-white',
 };
 
-const severityIcons: Record<string, React.ReactNode> = {
-    'Critical': <ShieldAlert className="h-4 w-4 text-red-700" />,
-    'High': <ShieldAlert className="h-4 w-4 text-red-500" />,
-    'Medium': <AlertTriangle className="h-4 w-4 text-yellow-500" />,
-    'Low': <ShieldQuestion className="h-4 w-4 text-blue-500" />,
-    'Info': <Info className="h-4 w-4 text-gray-500" />,
+const typeIcons: Record<string, React.ReactNode> = {
+    'Conflict': <GitMerge className="h-4 w-4 text-orange-500" />,
+    'Security': <ShieldAlert className="h-4 w-4 text-red-500" />,
+    'Best Practice': <Fingerprint className="h-4 w-4 text-blue-500" />,
+    'General': <Info className="h-4 w-4 text-gray-500" />,
 };
 
+const severityIcons: Record<string, React.FC<{className?: string}>> = {
+    'Critical': (props) => <ShieldAlert {...props} />,
+    'High': (props) => <ShieldAlert {...props} />,
+    'Medium': (props) => <AlertTriangle {...props} />,
+    'Low': (props) => <ShieldQuestion {...props} />,
+    'Info': (props) => <Info {...props} />,
+};
 
 export function PolicyValidation() {
   const [state, formAction] = useActionState(validatePolicyAction, initialState);
@@ -76,19 +82,19 @@ export function PolicyValidation() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Policy Validation</CardTitle>
+        <CardTitle>Policy Validation & Conflict Detection</CardTitle>
         <CardDescription>
-          Check a firewall policy against security best practices.
+          Check a firewall policy against security best practices and for conflicts like shadowing or redundancy.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <form ref={formRef} action={formAction} className="space-y-4">
           <div>
-            <Label htmlFor="policy">Policy (YAML or JSON)</Label>
+            <Label htmlFor="policy">Policy Set (YAML or JSON)</Label>
             <Textarea
               id="policy"
               name="policy"
-              placeholder="Paste a single policy configuration here..."
+              placeholder="Paste your policy set configuration here..."
               className="h-40 bg-background font-mono"
             />
           </div>
@@ -102,7 +108,7 @@ export function PolicyValidation() {
             <div className="space-y-4 text-sm">
                 <div className='flex items-center gap-2'>
                     {result.isValid ? (
-                        <><ShieldCheck className="h-5 w-5 text-accent" /> <span className='font-medium'>Policy is valid.</span></>
+                        <><ShieldCheck className="h-5 w-5 text-accent" /> <span className='font-medium'>Policy is valid. No issues found.</span></>
                     ) : (
                         <><ShieldAlert className="h-5 w-5 text-destructive" /> <span className='font-medium'>Policy has issues.</span></>
                     )}
@@ -112,17 +118,26 @@ export function PolicyValidation() {
                     <div>
                         <p className="font-medium mb-2">Findings:</p>
                         <ul className='space-y-2'>
-                            {result.findings.map((finding, index) => (
-                                <li key={index} className="flex items-start gap-3 p-2 rounded-md bg-background/50">
-                                    <div className="pt-0.5">
-                                        {severityIcons[finding.severity]}
-                                    </div>
-                                    <div>
-                                        <Badge className={cn('mb-1', severityStyles[finding.severity])}>{finding.severity}</Badge>
-                                        <p className="text-muted-foreground">{finding.message}</p>
-                                    </div>
-                                </li>
-                            ))}
+                            {result.findings.map((finding, index) => {
+                                const Icon = severityIcons[finding.severity];
+                                return (
+                                    <li key={index} className="flex items-start gap-3 p-2 rounded-md bg-background/50 border">
+                                        <div className="pt-0.5">
+                                            {Icon && <Icon className={cn('h-4 w-4', severityStyles[finding.severity]?.replace('bg-', 'text-'))} />}
+                                        </div>
+                                        <div className='flex-1'>
+                                            <div className='flex items-center gap-2 mb-1'>
+                                                <Badge className={cn(severityStyles[finding.severity])}>{finding.severity}</Badge>
+                                                <div className='flex items-center gap-1 text-xs text-muted-foreground'>
+                                                    {typeIcons[finding.type]}
+                                                    <span>{finding.type}</span>
+                                                </div>
+                                            </div>
+                                            <p className="text-muted-foreground">{finding.message}</p>
+                                        </div>
+                                    </li>
+                                );
+                            })}
                         </ul>
                     </div>
                 )}

@@ -14,6 +14,7 @@ import {
   BarChart,
   ShieldAlert,
   Radiation,
+  Database,
 } from 'lucide-react';
 import {
   SidebarHeader,
@@ -63,6 +64,14 @@ export function SidebarNav() {
               <Link href="/monitoring">
                 <Gauge />
                 Monitoring
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+           <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname === '/configuration'} tooltip="Configuration">
+              <Link href="/configuration">
+                <Database />
+                Configuration
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
