@@ -1,4 +1,3 @@
-import { NewPolicyDialog } from '@/components/policies/new-policy-dialog';
 import {
   Card,
   CardContent,
@@ -16,6 +15,8 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { getPolicies } from '@/lib/data';
+import { NewPolicyDialog } from '@/components/policies/new-policy-dialog';
+import { PolicyActions } from '@/components/policies/policy-actions';
 
 export default function PoliciesPage() {
   const policies = getPolicies();
@@ -48,6 +49,7 @@ export default function PoliciesPage() {
                 <TableHead>Destination</TableHead>
                 <TableHead>Action</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -72,9 +74,13 @@ export default function PoliciesPage() {
                       variant={
                         policy.status === 'Active' ? 'secondary' : 'outline'
                       }
+                      className={policy.status === 'Active' ? 'bg-green-500/20 text-green-500 border-green-500/20' : ''}
                     >
                       {policy.status}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <PolicyActions policy={policy} />
                   </TableCell>
                 </TableRow>
               ))}

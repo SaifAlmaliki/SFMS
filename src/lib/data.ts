@@ -1,5 +1,14 @@
 
-let policies = [
+type Policy = {
+    id: string;
+    name: string;
+    source: string;
+    destination: string;
+    action: 'Allow' | 'Deny';
+    status: 'Active' | 'Inactive';
+};
+
+let policies: Policy[] = [
   {
     id: 'POL-001',
     name: 'Allow HTTP/HTTPS from Internal to DMZ',
@@ -85,8 +94,18 @@ export function getRecentActivities() {
     return recentActivities;
 }
 
-export function addPolicy(policy: Omit<typeof policies[0], 'id'>) {
+export function addPolicy(policy: Omit<Policy, 'id'>) {
     const newId = `POL-${String(policies.length + 1).padStart(3, '0')}`;
     policies.unshift({ id: newId, ...policy });
+    return policies;
+}
+
+export function updatePolicy(updatedPolicy: Policy) {
+    policies = policies.map(p => p.id === updatedPolicy.id ? updatedPolicy : p);
+    return policies;
+}
+
+export function deletePolicy(policyId: string) {
+    policies = policies.filter(p => p.id !== policyId);
     return policies;
 }

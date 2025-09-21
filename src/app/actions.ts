@@ -5,7 +5,7 @@ import { nlpChatbotAssistance } from '@/ai/flows/nlp-chatbot-assistance';
 import { selfHealingMisconfigurations } from '@/ai/flows/self-healing-misconfigurations';
 import { detectAdminAnomalies } from '@/ai/flows/detect-admin-anomalies';
 import { manageRetrainEvaluateVersion } from '@/ai/flows/ai-manage-retrain-evaluate-version';
-import { addPolicy } from '@/lib/data';
+import { addPolicy, deletePolicy, updatePolicy } from '@/lib/data';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
@@ -68,6 +68,56 @@ export async function createPolicyAction(prevState: any, formData: FormData) {
     } catch (e) {
         return {
             errors: { _server: ['Failed to create policy. Please try again.'] },
+        };
+    }
+}
+
+const updatePolicySchema = newPolicySchema.extend({
+    id: z.string(),
+});
+
+export async function updatePolicyAction(prevState: any, formData: FormData) {
+    const validatedFields = updatePolicySchema.safeParse({
+        id: formData.get('id'),
+        name: formData.get('name'),
+        source: formData.get('source'),
+        destination: formData.get('destination'),
+        action: formData.get('action'),
+        status: formData.get('status'),
+    });
+
+    if (!validatedFields.success) {
+        return {
+            errors: validatedFields.error.flatten().fieldErrors,
+        };
+    }
+
+    try {
+        updatePolicy(validatedFields.data);
+        revalidatePath('/policies');
+        return {
+            success: true,
+        };
+    } catch (e) {
+        return {
+            errors: { _server: ['Failed to update policy. Please try again.'] },
+        };
+    }
+}
+
+export async function deletePolicyAction(prevState: any, formData: FormData) {
+    const id = formData.get('id') as string;
+    if (!id) {
+        return { error: 'Policy ID is required.' };
+    }
+
+    try {
+        deletePolicy(id);
+        revalidatePath('/policies');
+        return { success: true };
+    } catch (e) {
+        return {
+            error: 'Failed to delete policy. Please try again.',
         };
     }
 }

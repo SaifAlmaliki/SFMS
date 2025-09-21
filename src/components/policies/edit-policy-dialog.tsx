@@ -12,25 +12,34 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { createPolicyAction } from '@/app/actions';
-import { PlusCircle } from 'lucide-react';
+import { updatePolicyAction } from '@/app/actions';
+import { Pencil } from 'lucide-react';
 import { PolicyForm } from './policy-form';
+
+type Policy = {
+    id: string;
+    name: string;
+    source: string;
+    destination: string;
+    action: 'Allow' | 'Deny';
+    status: 'Active' | 'Inactive';
+};
 
 const initialState = {
     errors: {},
     success: false,
 };
 
-export function NewPolicyDialog() {
+export function EditPolicyDialog({ policy }: { policy: Policy }) {
   const [open, setOpen] = useState(false);
-  const [state, formAction] = useActionState(createPolicyAction, initialState);
+  const [state, formAction] = useActionState(updatePolicyAction, initialState);
   const { toast } = useToast();
 
   useEffect(() => {
     if (state.success) {
       toast({
         title: 'Success!',
-        description: 'New policy has been created.',
+        description: 'Policy has been updated.',
       });
       setOpen(false);
     }
@@ -47,20 +56,20 @@ export function NewPolicyDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          New Policy
+        <Button variant="ghost" size="icon">
+          <Pencil className="h-4 w-4" />
+          <span className="sr-only">Edit Policy</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Create New Policy</DialogTitle>
+          <DialogTitle>Edit Policy</DialogTitle>
           <DialogDescription>
-            Fill in the details to create a new firewall policy.
+            Update the details for this firewall policy.
           </DialogDescription>
         </DialogHeader>
         <form action={formAction}>
-            <PolicyForm errors={state.errors} submitButtonText="Create Policy" />
+            <PolicyForm policy={policy} errors={state.errors} submitButtonText="Update Policy" />
         </form>
       </DialogContent>
     </Dialog>
