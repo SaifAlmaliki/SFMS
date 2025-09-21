@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -11,6 +12,7 @@ import {
   Flame,
   Wrench,
   BarChart,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   SidebarHeader,
@@ -76,6 +78,14 @@ export function SidebarNav() {
               <Link href="/ai-tools">
                 <Bot />
                 AI Tools
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+           <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname === '/threat-intelligence'} tooltip="Threat Intelligence">
+              <Link href="/threat-intelligence">
+                <ShieldAlert />
+                Threat Intelligence
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
