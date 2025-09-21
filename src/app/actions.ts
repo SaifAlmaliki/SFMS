@@ -5,6 +5,8 @@ import { nlpChatbotAssistance } from '@/ai/flows/nlp-chatbot-assistance';
 import { selfHealingMisconfigurations } from '@/ai/flows/self-healing-misconfigurations';
 import { detectAdminAnomalies } from '@/ai/flows/detect-admin-anomalies';
 import { manageRetrainEvaluateVersion } from '@/ai/flows/ai-manage-retrain-evaluate-version';
+import { addPolicy } from '@/lib/data';
+import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 const policySchema = z.object({
@@ -32,6 +34,42 @@ export async function generatePolicyAction(prevState: any, formData: FormData) {
       error: { _server: ['Failed to generate policy. Please try again.'] },
     };
   }
+}
+
+const newPolicySchema = z.object({
+    name: z.string().min(1, 'Policy name is required.'),
+    source: z.string().min(1, 'Source is required.'),
+    destination: z.string().min(1, 'Destination is required.'),
+    action: z.enum(['Allow', 'Deny']),
+    status: z.enum(['Active', 'Inactive']),
+});
+
+export async function createPolicyAction(prevState: any, formData: FormData) {
+    const validatedFields = newPolicySchema.safeParse({
+        name: formData.get('name'),
+        source: formData.get('source'),
+        destination: formData.get('destination'),
+        action: formData.get('action'),
+        status: formData.get('status'),
+    });
+
+    if (!validatedFields.success) {
+        return {
+            errors: validatedFields.error.flatten().fieldErrors,
+        };
+    }
+
+    try {
+        addPolicy(validatedFields.data);
+        revalidatePath('/policies');
+        return {
+            success: true,
+        };
+    } catch (e) {
+        return {
+            errors: { _server: ['Failed to create policy. Please try again.'] },
+        };
+    }
 }
 
 

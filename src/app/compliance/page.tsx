@@ -15,33 +15,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-
-const complianceReports = [
-  {
-    framework: 'PCI DSS',
-    status: 'Compliant',
-    lastAudit: '2024-05-20',
-    coverage: 98,
-  },
-  {
-    framework: 'HIPAA',
-    status: 'Compliant',
-    lastAudit: '2024-04-15',
-    coverage: 100,
-  },
-  {
-    framework: 'GDPR',
-    status: 'Needs Review',
-    lastAudit: '2024-06-01',
-    coverage: 85,
-  },
-  {
-    framework: 'ISO 27001',
-    status: 'Non-Compliant',
-    lastAudit: '2024-03-10',
-    coverage: 60,
-  },
-];
+import { getComplianceReports } from '@/lib/data';
 
 const statusStyles = {
   Compliant: 'bg-accent text-accent-foreground',
@@ -50,6 +24,7 @@ const statusStyles = {
 };
 
 export default function CompliancePage() {
+  const complianceReports = getComplianceReports();
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Compliance Management</h1>
@@ -81,7 +56,7 @@ export default function CompliancePage() {
                     {report.framework}
                   </TableCell>
                   <TableCell>
-                    <Badge className={statusStyles[report.status]}>
+                    <Badge className={statusStyles[report.status as keyof typeof statusStyles]}>
                       {report.status}
                     </Badge>
                   </TableCell>

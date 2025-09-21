@@ -6,18 +6,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-
-const activities = [
-  { user: 'Alice', action: 'Created policy #4021', time: '5m ago' },
-  { user: 'Bob', action: 'Updated device FW-Primary-DC1', time: '12m ago' },
-  {
-    user: 'System',
-    action: 'Auto-healed misconfiguration on FW-Branch-Office-A',
-    time: '1h ago',
-  },
-  { user: 'Charlie', action: 'Approved policy #4020', time: '3h ago' },
-  { user: 'Alice', action: 'Generated policy from template', time: '5h ago' },
-];
+import { getRecentActivities } from '@/lib/data';
 
 function getInitials(name: string) {
   if (name === 'System') return 'S';
@@ -26,6 +15,7 @@ function getInitials(name: string) {
 }
 
 export function RecentActivity() {
+    const activities = getRecentActivities();
   return (
     <Card className="lg:col-span-2 xl:col-span-2">
       <CardHeader>

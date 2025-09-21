@@ -15,43 +15,10 @@ import {
   TableCell,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-
-const policies = [
-  {
-    id: 'POL-001',
-    name: 'Allow HTTP/HTTPS from Internal to DMZ',
-    source: 'Internal',
-    destination: 'DMZ',
-    action: 'Allow',
-    status: 'Active',
-  },
-  {
-    id: 'POL-002',
-    name: 'Block all traffic from Public to Internal',
-    source: 'Public',
-    destination: 'Internal',
-    action: 'Deny',
-    status: 'Active',
-  },
-  {
-    id: 'POL-003',
-    name: 'Allow Database access from App Servers',
-    source: 'App-Servers',
-    destination: 'DB-Servers',
-    action: 'Allow',
-    status: 'Inactive',
-  },
-  {
-    id: 'POL-004',
-    name: 'Allow SSH from Admin Workstations',
-    source: 'Admin-Network',
-    destination: 'Any',
-    action: 'Allow',
-    status: 'Active',
-  },
-];
+import { getPolicies } from '@/lib/data';
 
 export default function PoliciesPage() {
+  const policies = getPolicies();
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-start">
