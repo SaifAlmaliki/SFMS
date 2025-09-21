@@ -80,16 +80,6 @@ const selfHealingMisconfigurationsPrompt = ai.definePrompt({
   Only provide a list of misconfigurations detected and suggested corrections without applying them.
   {{/if}}
 
-  Misconfigurations Detected:
-  [List the misconfigurations detected in the firewall configuration based on the guardrails]
-
-  Suggested Corrections:
-  [List the suggested corrections to address the identified misconfigurations]
-
-  {{#if autoCorrect}}
-  Corrected Configuration: [Provide the corrected firewall configuration after applying the suggestions]
-  {{/if}}
-
   Ensure that the output is well-formatted and easy to understand.
   `,
 });
