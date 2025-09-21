@@ -1,6 +1,7 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { generatePolicyAction } from '@/app/actions';
@@ -24,7 +25,7 @@ function SubmitButton() {
 }
 
 export function PolicyGenerator() {
-  const [state, formAction] = useFormState(generatePolicyAction, initialState);
+  const [state, formAction] = useActionState(generatePolicyAction, initialState);
   const [policy, setPolicy] = useState('');
   const formRef = useRef<HTMLFormElement>(null);
   const { toast } = useToast();
