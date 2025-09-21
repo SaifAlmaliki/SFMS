@@ -48,18 +48,18 @@ Retrain: {{{retrain}}}
 Evaluate: {{{evaluate}}}
 Version: {{{version}}}
 
-{% if retrain %}
+{{#if retrain}}
 You will retrain the model using the provided training data. 
 Training Data URI: {{media url=trainingDataUri}}
-{% endif %}
+{{/if}}
 
-{% if evaluate %}
+{{#if evaluate}}
 You will evaluate the model and return the evaluation results.
-{% endif %}
+{{/if}}
 
-{% if version %}
+{{#if version}}
 You will create a new version of the model.
-{% endif %}
+{{/if}}
 
 Return the results of the requested actions in the output schema.
 `,}

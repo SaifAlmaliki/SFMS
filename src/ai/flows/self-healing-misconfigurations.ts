@@ -69,13 +69,16 @@ const selfHealingMisconfigurationsPrompt = ai.definePrompt({
   Analyze the provided firewall configuration against the defined guardrails and suggest corrections to ensure a secure and compliant configuration.
 
   Firewall Configuration:
-  {{firewallConfiguration}}
+  {{{firewallConfiguration}}}
 
   Guardrails:
-  {{guardrails}}
+  {{{guardrails}}}
 
-  {% raw %}{{ #if autoCorrect }}Automatically apply the suggested corrections to the firewall configuration.{/ raw %}{% endraw %}
-  {% raw %}{{ else }}Only provide a list of misconfigurations detected and suggested corrections without applying them.{/ raw %}{% endraw %}
+  {{#if autoCorrect}}
+  Automatically apply the suggested corrections to the firewall configuration.
+  {{else}}
+  Only provide a list of misconfigurations detected and suggested corrections without applying them.
+  {{/if}}
 
   Misconfigurations Detected:
   [List the misconfigurations detected in the firewall configuration based on the guardrails]
@@ -83,10 +86,12 @@ const selfHealingMisconfigurationsPrompt = ai.definePrompt({
   Suggested Corrections:
   [List the suggested corrections to address the identified misconfigurations]
 
-  {% raw %}{{ #if autoCorrect }}Corrected Configuration: [Provide the corrected firewall configuration after applying the suggestions]{{/ raw %}{% endraw %}{% raw %}{{/if}}{/ raw %}{% endraw %}
+  {{#if autoCorrect}}
+  Corrected Configuration: [Provide the corrected firewall configuration after applying the suggestions]
+  {{/if}}
 
   Ensure that the output is well-formatted and easy to understand.
-  `, // Ensure that the output is well-formatted and easy to understand
+  `,
 });
 
 // Define the Genkit flow
