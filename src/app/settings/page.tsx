@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -73,7 +74,7 @@ export default function SettingsPage() {
               <form className="space-y-4" onSubmit={handleProfileUpdate}>
                 <div className="space-y-2">
                   <Label htmlFor="name">Name</Label>
-                  <Input id="name" defaultValue="Admin" />
+                  <Input id="name" defaultValue="Admin" suppressHydrationWarning />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
@@ -81,6 +82,7 @@ export default function SettingsPage() {
                     id="email"
                     type="email"
                     defaultValue="admin@example.com"
+                    suppressHydrationWarning
                   />
                 </div>
                 <Button type="submit">Update Profile</Button>
@@ -97,15 +99,15 @@ export default function SettingsPage() {
               <form className="space-y-4" onSubmit={handlePasswordChange}>
                 <div className="space-y-2">
                   <Label htmlFor="current-password">Current Password</Label>
-                  <Input id="current-password" type="password" />
+                  <Input id="current-password" type="password" suppressHydrationWarning />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="new-password">New Password</Label>
-                  <Input id="new-password" name="new-password" type="password" />
+                  <Input id="new-password" name="new-password" type="password" suppressHydrationWarning />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confirm-password">Confirm New Password</Label>
-                  <Input id="confirm-password" name="confirm-password" type="password" />
+                  <Input id="confirm-password" name="confirm-password" type="password" suppressHydrationWarning />
                 </div>
                 <Button type="submit">Change Password</Button>
               </form>
