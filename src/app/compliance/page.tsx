@@ -1,3 +1,4 @@
+
 import {
   Card,
   CardContent,
@@ -16,6 +17,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { getComplianceReports } from '@/lib/data';
+import Link from 'next/link';
 
 const statusStyles = {
   Compliant: 'bg-accent text-accent-foreground',
@@ -51,21 +53,27 @@ export default function CompliancePage() {
             </TableHeader>
             <TableBody>
               {complianceReports.map((report) => (
-                <TableRow key={report.framework}>
+                <TableRow key={report.framework} className="cursor-pointer hover:bg-muted/50">
                   <TableCell className="font-medium">
-                    {report.framework}
+                    <Link href={`/compliance/${report.framework.toLowerCase()}`} className="block">
+                      {report.framework}
+                    </Link>
                   </TableCell>
                   <TableCell>
+                  <Link href={`/compliance/${report.framework.toLowerCase()}`} className="block">
                     <Badge className={statusStyles[report.status as keyof typeof statusStyles]}>
                       {report.status}
                     </Badge>
+                    </Link>
                   </TableCell>
-                  <TableCell>{report.lastAudit}</TableCell>
+                  <TableCell><Link href={`/compliance/${report.framework.toLowerCase()}`} className="block">{report.lastAudit}</Link></TableCell>
                   <TableCell className="text-right">
+                  <Link href={`/compliance/${report.framework.toLowerCase()}`} className="block">
                     <div className="flex items-center justify-end gap-2">
                         <span className='w-12 text-left'>{report.coverage}%</span>
                         <Progress value={report.coverage} className="w-32" />
                     </div>
+                    </Link>
                   </TableCell>
                 </TableRow>
               ))}
