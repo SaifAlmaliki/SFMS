@@ -23,7 +23,7 @@ const CreateIncidentOutputSchema = z.object({
   summary: z.string().describe('A summary of the event, including the what, when, and where.'),
   recommendedActions: z.string().describe('A list of immediate recommended actions for the response team (e.g., "Isolate host 10.1.2.3", "Block IP 203.0.113.55").'),
 });
-export type CreateIncidentOutput = z.infer<typeof CreateIncidentOutputSchema>;
+export type CreateIncidentOutput = zīnfer<typeof CreateIncidentOutputSchema>;
 
 export async function createIncident(input: CreateIncidentInput): Promise<CreateIncidentOutput> {
   return createIncidentFlow(input);
