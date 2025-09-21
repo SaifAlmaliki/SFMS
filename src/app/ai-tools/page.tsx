@@ -10,6 +10,8 @@ import { PolicyGenerator } from '@/components/dashboard/policy-generator';
 import { SelfHealing } from '@/components/ai-tools/self-healing';
 import { ModelManagement } from '@/components/ai-tools/model-management';
 import { AnomalyDetection } from '@/components/ai-tools/anomaly-detection';
+import { PolicyValidation } from '@/components/ai-tools/policy-validation';
+import { PolicySimulation } from '@/components/ai-tools/policy-simulation';
 
 export default function AiToolsPage() {
   return (
@@ -20,8 +22,10 @@ export default function AiToolsPage() {
       </p>
 
       <Tabs defaultValue="policy-generator">
-        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
+        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 md:grid-cols-5">
           <TabsTrigger value="policy-generator">Policy Generator</TabsTrigger>
+          <TabsTrigger value="policy-validation">Validation</TabsTrigger>
+          <TabsTrigger value="policy-simulation">Simulation</TabsTrigger>
           <TabsTrigger value="self-healing">Self-Healing</TabsTrigger>
           <TabsTrigger value="anomaly-detection">UBA</TabsTrigger>
           <TabsTrigger value="model-management">Model Management</TabsTrigger>
@@ -38,6 +42,12 @@ export default function AiToolsPage() {
               <PolicyGenerator />
             </CardContent>
           </Card>
+        </TabsContent>
+        <TabsContent value="policy-validation">
+          <PolicyValidation />
+        </TabsContent>
+        <TabsContent value="policy-simulation">
+          <PolicySimulation />
         </TabsContent>
         <TabsContent value="self-healing">
           <SelfHealing />
