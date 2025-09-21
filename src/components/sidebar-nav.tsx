@@ -63,10 +63,10 @@ export function SidebarNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           
-          <Collapsible asChild open={openCollapsibles.policy} onOpenChange={(isOpen) => setOpenCollapsibles(prev => ({...prev, policy: isOpen}))}>
+          <Collapsible open={openCollapsibles.policy} onOpenChange={(isOpen) => setOpenCollapsibles(prev => ({...prev, policy: isOpen}))}>
             <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
-                    <SidebarMenuButton isActive={isPolicyOpen} className='justify-between' tooltip='Policy Management'>
+                    <SidebarMenuButton isActive={isPolicyOpen} className='justify-between w-full' tooltip='Policy Management'>
                     <div className='flex items-center gap-2'>
                         <FileTerminal />
                         Policies
@@ -74,25 +74,25 @@ export function SidebarNav() {
                     <ChevronDown className={cn('h-4 w-4 transition-transform', openCollapsibles.policy && 'rotate-180')} />
                     </SidebarMenuButton>
                 </CollapsibleTrigger>
-                <CollapsibleContent className='pl-4'>
-                    <SidebarMenu className='py-2'>
-                        <SidebarMenuItem>
-                        <SidebarMenuButton asChild isActive={pathname === '/policies'} size="sm">
-                            <Link href="/policies">
-                            All Policies
-                            </Link>
-                        </SidebarMenuButton>
-                        </SidebarMenuItem>
-                        <SidebarMenuItem>
-                        <SidebarMenuButton asChild isActive={pathname === '/templates'} size="sm">
-                            <Link href="/templates">
-                            Templates
-                            </Link>
-                        </SidebarMenuButton>
-                        </SidebarMenuItem>
-                    </SidebarMenu>
-                </CollapsibleContent>
             </SidebarMenuItem>
+            <CollapsibleContent>
+                <SidebarMenu className='py-2 pl-7'>
+                    <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={pathname === '/policies'} size="sm">
+                        <Link href="/policies">
+                        All Policies
+                        </Link>
+                    </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={pathname === '/templates'} size="sm">
+                        <Link href="/templates">
+                        Templates
+                        </Link>
+                    </SidebarMenuButton>
+                    </SidebarMenuItem>
+                </SidebarMenu>
+            </CollapsibleContent>
           </Collapsible>
 
           <SidebarMenuItem>
@@ -120,7 +120,7 @@ export function SidebarNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname === '/compliance'} tooltip="Compliance">
+            <SidebarMenuButton asChild isActive={pathname.startsWith('/compliance')} tooltip="Compliance">
               <Link href="/compliance">
                 <ShieldCheck />
                 Compliance
