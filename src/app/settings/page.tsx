@@ -16,6 +16,21 @@ import { Separator } from '@/components/ui/separator';
 import { UsersAndRoles } from '@/components/settings/users-and-roles';
 import { InviteUser } from '@/components/settings/invite-user';
 import { useToast } from '@/hooks/use-toast';
+import { useEffect, useState } from 'react';
+
+function ClientOnly({ children }: { children: React.ReactNode }) {
+    const [hasMounted, setHasMounted] = useState(false);
+  
+    useEffect(() => {
+      setHasMounted(true);
+    }, []);
+  
+    if (!hasMounted) {
+      return null;
+    }
+  
+    return <>{children}</>;
+  }
 
 export default function SettingsPage() {
     const { toast } = useToast();
@@ -71,21 +86,23 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form className="space-y-4" onSubmit={handleProfileUpdate} suppressHydrationWarning>
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input id="name" defaultValue="Admin" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    defaultValue="admin@example.com"
-                  />
-                </div>
-                <Button type="submit">Update Profile</Button>
-              </form>
+                <ClientOnly>
+                    <form className="space-y-4" onSubmit={handleProfileUpdate} suppressHydrationWarning>
+                        <div className="space-y-2">
+                        <Label htmlFor="name">Name</Label>
+                        <Input id="name" defaultValue="Admin" />
+                        </div>
+                        <div className="space-y-2">
+                        <Label htmlFor="email">Email</Label>
+                        <Input
+                            id="email"
+                            type="email"
+                            defaultValue="admin@example.com"
+                        />
+                        </div>
+                        <Button type="submit">Update Profile</Button>
+                    </form>
+              </ClientOnly>
             </CardContent>
           </Card>
 
@@ -95,21 +112,23 @@ export default function SettingsPage() {
               <CardDescription>Change your password.</CardDescription>
             </CardHeader>
             <CardContent>
-              <form className="space-y-4" onSubmit={handlePasswordChange} suppressHydrationWarning>
-                <div className="space-y-2">
-                  <Label htmlFor="current-password">Current Password</Label>
-                  <Input id="current-password" type="password" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="new-password">New Password</Label>
-                  <Input id="new-password" name="new-password" type="password" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirm-password">Confirm New Password</Label>
-                  <Input id="confirm-password" name="confirm-password" type="password" />
-                </div>
-                <Button type="submit">Change Password</Button>
-              </form>
+                <ClientOnly>
+                    <form className="space-y-4" onSubmit={handlePasswordChange} suppressHydrationWarning>
+                        <div className="space-y-2">
+                        <Label htmlFor="current-password">Current Password</Label>
+                        <Input id="current-password" type="password" />
+                        </div>
+                        <div className="space-y-2">
+                        <Label htmlFor="new-password">New Password</Label>
+                        <Input id="new-password" name="new-password" type="password" />
+                        </div>
+                        <div className="space-y-2">
+                        <Label htmlFor="confirm-password">Confirm New Password</Label>
+                        <Input id="confirm-password" name="confirm-password" type="password" />
+                        </div>
+                        <Button type="submit">Change Password</Button>
+                    </form>
+                </ClientOnly>
             </CardContent>
           </Card>
         </div>
