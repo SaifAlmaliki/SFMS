@@ -18,7 +18,7 @@ const policySchema = z.object({
   description: z.string().min(10, 'Please provide a more detailed description.'),
 });
 
-export async function generatePolicyAction(prevState: any, formData: FormData) {
+export async function generatePolicyAction(_prevState: any, formData: FormData) {
   const validatedFields = policySchema.safeParse({
     description: formData.get('description'),
   });
@@ -49,7 +49,7 @@ const newPolicySchema = z.object({
     status: z.enum(['Active', 'Inactive', 'Pending Approval']),
 });
 
-export async function createPolicyAction(prevState: any, formData: FormData) {
+export async function createPolicyAction(_prevState: any, formData: FormData) {
     const validatedFields = newPolicySchema.safeParse({
         name: formData.get('name'),
         source: formData.get('source'),
@@ -83,7 +83,7 @@ const updatePolicySchema = newPolicySchema.extend({
     id: z.string(),
 });
 
-export async function updatePolicyAction(prevState: any, formData: FormData) {
+export async function updatePolicyAction(_prevState: any, formData: FormData) {
     const validatedFields = updatePolicySchema.safeParse({
         id: formData.get('id'),
         name: formData.get('name'),
@@ -112,7 +112,7 @@ export async function updatePolicyAction(prevState: any, formData: FormData) {
     }
 }
 
-export async function deletePolicyAction(prevState: any, formData: FormData) {
+export async function deletePolicyAction(_prevState: any, formData: FormData) {
     const id = formData.get('id') as string;
     if (!id) {
         return { error: 'Policy ID is required.' };
@@ -133,7 +133,7 @@ const policyDecisionSchema = z.object({
     id: z.string(),
 });
 
-export async function approvePolicyAction(prevState: any, formData: FormData) {
+export async function approvePolicyAction(_prevState: any, formData: FormData) {
     const validatedFields = policyDecisionSchema.safeParse({ id: formData.get('id') });
     if (!validatedFields.success) {
         return { error: 'Invalid Policy ID.' };
@@ -148,7 +148,7 @@ export async function approvePolicyAction(prevState: any, formData: FormData) {
 }
 
 
-export async function rejectPolicyAction(prevState: any, formData: FormData) {
+export async function rejectPolicyAction(_prevState: any, formData: FormData) {
     const validatedFields = policyDecisionSchema.safeParse({ id: formData.get('id') });
     if (!validatedFields.success) {
         return { error: 'Invalid Policy ID.' };
@@ -169,7 +169,7 @@ const chatSchema = z.object({
   query: z.string().min(1, 'Message cannot be empty.'),
 });
 
-export async function chatAction(prevState: any, formData: FormData) {
+export async function chatAction(_prevState: any, formData: FormData) {
     const validatedFields = chatSchema.safeParse({
         query: formData.get('query'),
     });
@@ -198,7 +198,7 @@ const selfHealingSchema = z.object({
     autoCorrect: z.boolean(),
 });
 
-export async function selfHealingAction(prevState: any, formData: FormData) {
+export async function selfHealingAction(_prevState: any, formData: FormData) {
     const validatedFields = selfHealingSchema.safeParse({
         firewallConfiguration: formData.get('firewallConfiguration'),
         guardrails: formData.get('guardrails'),
@@ -230,7 +230,7 @@ const modelManagementSchema = z.object({
     version: z.boolean(),
   });
   
-  export async function modelManagementAction(prevState: any, formData: FormData) {
+  export async function modelManagementAction(_prevState: any, formData: FormData) {
     const validatedFields = modelManagementSchema.safeParse({
       modelName: formData.get('modelName'),
       retrain: formData.get('retrain') === 'on',
@@ -261,7 +261,7 @@ const modelManagementSchema = z.object({
     accessPatterns: z.string().min(1, 'Access patterns log cannot be empty.'),
   });
   
-  export async function anomalyDetectionAction(prevState: any, formData: FormData) {
+  export async function anomalyDetectionAction(_prevState: any, formData: FormData) {
     const validatedFields = anomalyDetectionSchema.safeParse({
       adminActions: formData.get('adminActions'),
       accessPatterns: formData.get('accessPatterns'),
@@ -285,7 +285,7 @@ const modelManagementSchema = z.object({
     }
   }
 
-  export async function rollbackSnapshotAction(prevState: any, formData: FormData) {
+  export async function rollbackSnapshotAction(_prevState: any, formData: FormData) {
     const version = formData.get('version') as string;
     if (!version) {
         return { error: 'Snapshot version is required.' };
@@ -306,7 +306,7 @@ const validatePolicySchema = z.object({
     policy: z.string().min(1, 'Policy cannot be empty.'),
 });
 
-export async function validatePolicyAction(prevState: any, formData: FormData) {
+export async function validatePolicyAction(_prevState: any, formData: FormData) {
     const validatedFields = validatePolicySchema.safeParse({
         policy: formData.get('policy'),
     });
@@ -334,7 +334,7 @@ const simulatePolicySchema = z.object({
     trafficFlow: z.string().min(1, 'Traffic flow cannot be empty.'),
 });
 
-export async function simulatePolicyAction(prevState: any, formData: FormData) {
+export async function simulatePolicyAction(_prevState: any, formData: FormData) {
     const validatedFields = simulatePolicySchema.safeParse({
         policySet: formData.get('policySet'),
         trafficFlow: formData.get('trafficFlow'),
@@ -363,7 +363,7 @@ const emulateAdversarySchema = z.object({
     attackTechniqueId: z.string().min(1, 'MITRE ATT&CK technique ID cannot be empty.'),
 });
 
-export async function emulateAdversaryAction(prevState: any, formData: FormData) {
+export async function emulateAdversaryAction(_prevState: any, formData: FormData) {
     const validatedFields = emulateAdversarySchema.safeParse({
         policySet: formData.get('policySet'),
         attackTechniqueId: formData.get('attackTechniqueId'),
@@ -391,7 +391,7 @@ const createIncidentSchema = z.object({
     eventDescription: z.string().min(1, 'Event description cannot be empty.'),
 });
 
-export async function createIncidentAction(prevState: any, formData: FormData) {
+export async function createIncidentAction(_prevState: any, formData: FormData) {
     const validatedFields = createIncidentSchema.safeParse({
         eventDescription: formData.get('eventDescription'),
     });
@@ -413,3 +413,5 @@ export async function createIncidentAction(prevState: any, formData: FormData) {
         };
     }
 }
+
+    

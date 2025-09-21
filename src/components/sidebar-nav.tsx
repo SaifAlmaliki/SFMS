@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -77,18 +76,18 @@ export function SidebarNav() {
               <CollapsibleContent>
                   <SidebarMenu className='py-2 pl-7'>
                       <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={pathname === '/policies'} size="sm">
-                          <Link href="/policies">
-                          All Policies
-                          </Link>
-                      </SidebarMenuButton>
+                        <SidebarMenuButton asChild isActive={pathname === '/policies'} size="sm">
+                            <Link href="/policies">
+                            All Policies
+                            </Link>
+                        </SidebarMenuButton>
                       </SidebarMenuItem>
                       <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={pathname === '/templates'} size="sm">
-                          <Link href="/templates">
-                          Templates
-                          </Link>
-                      </SidebarMenuButton>
+                        <SidebarMenuButton asChild isActive={pathname === '/templates'} size="sm">
+                            <Link href="/templates">
+                            Templates
+                            </Link>
+                        </SidebarMenuButton>
                       </SidebarMenuItem>
                   </SidebarMenu>
               </CollapsibleContent>
@@ -192,3 +191,5 @@ export function SidebarNav() {
     </>
   );
 }
+
+    

@@ -60,53 +60,47 @@ export function ModelManagement() {
   }, [state, toast]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>AI Model Management</CardTitle>
-        <CardDescription>
-          Retrain, evaluate, and version your AI models.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <form ref={formRef} action={formAction} className="space-y-4">
-          <div>
-            <Label htmlFor="modelName">Model Name</Label>
-            <Input
-              id="modelName"
-              name="modelName"
-              placeholder="Enter model name..."
-              className="bg-background"
-            />
+    <div className="space-y-4">
+      <form ref={formRef} action={formAction} className="space-y-4">
+        <div>
+          <Label htmlFor="modelName">Model Name</Label>
+          <Input
+            id="modelName"
+            name="modelName"
+            placeholder="Enter model name..."
+            className="bg-background"
+          />
+        </div>
+        <div className="flex items-center space-x-2">
+          <Switch id="retrain" name="retrain" />
+          <Label htmlFor="retrain">Retrain</Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Switch id="evaluate" name="evaluate" />
+          <Label htmlFor="evaluate">Evaluate</Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Switch id="version" name="version" />
+          <Label htmlFor="version">Version</Label>
+        </div>
+        <SubmitButton />
+      </form>
+      {result && (
+        <div className="rounded-md border bg-secondary/50 p-4 mt-4">
+          <h4 className="font-semibold mb-2 flex items-center">
+            <Bot className="mr-2 h-5 w-5 text-primary" /> Task Result
+          </h4>
+          <div className="space-y-2 text-sm">
+              <p><strong>Model:</strong> {result.modelName}</p>
+              <p><strong>Retrained:</strong> {result.retrained ? 'Yes' : 'No'}</p>
+              <p><strong>Evaluated:</strong> {result.evaluated ? 'Yes' : 'No'}</p>
+              <p><strong>Versioned:</strong> {result.versioned}</p>
+              {result.evaluationResults && <p><strong>Evaluation Results:</strong> {result.evaluationResults}</p>}
           </div>
-          <div className="flex items-center space-x-2">
-            <Switch id="retrain" name="retrain" />
-            <Label htmlFor="retrain">Retrain</Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Switch id="evaluate" name="evaluate" />
-            <Label htmlFor="evaluate">Evaluate</Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Switch id="version" name="version" />
-            <Label htmlFor="version">Version</Label>
-          </div>
-          <SubmitButton />
-        </form>
-        {result && (
-          <div className="rounded-md border bg-secondary/50 p-4 mt-4">
-            <h4 className="font-semibold mb-2 flex items-center">
-              <Bot className="mr-2 h-5 w-5 text-primary" /> Task Result
-            </h4>
-            <div className="space-y-2 text-sm">
-                <p><strong>Model:</strong> {result.modelName}</p>
-                <p><strong>Retrained:</strong> {result.retrained ? 'Yes' : 'No'}</p>
-                <p><strong>Evaluated:</strong> {result.evaluated ? 'Yes' : 'No'}</p>
-                <p><strong>Versioned:</strong> {result.versioned}</p>
-                {result.evaluationResults && <p><strong>Evaluation Results:</strong> {result.evaluationResults}</p>}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   );
 }
+
+    

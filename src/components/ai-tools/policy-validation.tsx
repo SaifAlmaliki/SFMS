@@ -81,85 +81,79 @@ export function PolicyValidation() {
   }, [state, toast]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Policy Validation & Conflict Detection</CardTitle>
-        <CardDescription>
-          Check a firewall policy against security best practices and for conflicts like shadowing or redundancy.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <form ref={formRef} action={formAction} className="space-y-4">
-          <div>
-            <Label htmlFor="policy">Policy Set (YAML or JSON)</Label>
-            <Textarea
-              id="policy"
-              name="policy"
-              placeholder="Paste your policy set configuration here..."
-              className="h-40 bg-background font-mono"
-            />
-          </div>
-          <SubmitButton />
-        </form>
-        {result && (
-          <div className="rounded-md border bg-secondary/50 p-4">
-            <h4 className="font-semibold mb-2 flex items-center">
-              <Bot className="mr-2 h-5 w-5 text-primary" /> Validation Result
-            </h4>
-            <div className="space-y-4 text-sm">
-                <div className='flex items-center gap-2'>
-                    {result.isValid ? (
-                        <><ShieldCheck className="h-5 w-5 text-accent" /> <span className='font-medium'>Policy is valid. No issues found.</span></>
-                    ) : (
-                        <><ShieldAlert className="h-5 w-5 text-destructive" /> <span className='font-medium'>Policy has {result.findings.length} issue(s).</span></>
-                    )}
-                </div>
+    <div className="space-y-4">
+      <form ref={formRef} action={formAction} className="space-y-4">
+        <div>
+          <Label htmlFor="policy">Policy Set (YAML or JSON)</Label>
+          <Textarea
+            id="policy"
+            name="policy"
+            placeholder="Paste your policy set configuration here..."
+            className="h-40 bg-background font-mono"
+          />
+        </div>
+        <SubmitButton />
+      </form>
+      {result && (
+        <div className="rounded-md border bg-secondary/50 p-4">
+          <h4 className="font-semibold mb-2 flex items-center">
+            <Bot className="mr-2 h-5 w-5 text-primary" /> Validation Result
+          </h4>
+          <div className="space-y-4 text-sm">
+              <div className='flex items-center gap-2'>
+                  {result.isValid ? (
+                      <><ShieldCheck className="h-5 w-5 text-accent" /> <span className='font-medium'>Policy is valid. No issues found.</span></>
+                  ) : (
+                      <><ShieldAlert className="h-5 w-5 text-destructive" /> <span className='font-medium'>Policy has {result.findings.length} issue(s).</span></>
+                  )}
+              </div>
 
-                {result.findings.length > 0 && (
-                    <div>
-                        <p className="font-medium mb-2">Findings:</p>
-                        <ul className='space-y-3'>
-                            {result.findings.map((finding, index) => {
-                                const Icon = severityIcons[finding.severity];
-                                return (
-                                    <li key={index} className="flex flex-col gap-3 p-3 rounded-md bg-background/50 border">
-                                        <div className="flex items-start gap-3">
-                                            <div className="pt-0.5">
-                                                {Icon && <Icon className={cn('h-4 w-4', severityStyles[finding.severity]?.replace(/bg-(\w+)-(\d+)/, 'text-$1-$2').replace('text-white', 'text-inherit'))} />}
-                                            </div>
-                                            <div className='flex-1'>
-                                                <div className='flex items-center gap-2 mb-1'>
-                                                    <Badge variant='outline' className={cn(severityStyles[finding.severity])}>{finding.severity}</Badge>
-                                                    <div className='flex items-center gap-1 text-xs text-muted-foreground'>
-                                                        {typeIcons[finding.type]}
-                                                        <span>{finding.type}</span>
-                                                    </div>
-                                                </div>
-                                                <p className="text-muted-foreground">{finding.message}</p>
-                                            </div>
-                                        </div>
-                                        {finding.suggestion && (
-                                            <>
-                                                <Separator className='my-2'/>
-                                                <div className="flex items-start gap-3 text-muted-foreground">
-                                                    <Lightbulb className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-                                                    <div className="flex-1">
-                                                        <span className="font-semibold text-foreground/90">Suggestion: </span>
-                                                        {finding.suggestion}
-                                                    </div>
-                                                </div>
-                                            </>
-                                        )}
-                                    </li>
-                                );
-                            })}
-                        </ul>
-                    </div>
-                )}
-            </div>
+              {result.findings.length > 0 && (
+                  <div>
+                      <p className="font-medium mb-2">Findings:</p>
+                      <ul className='space-y-3'>
+                          {result.findings.map((finding, index) => {
+                              const Icon = severityIcons[finding.severity];
+                              return (
+                                  <li key={index} className="flex flex-col gap-3 p-3 rounded-md bg-background/50 border">
+                                      <div className="flex items-start gap-3">
+                                          <div className="pt-0.5">
+                                              {Icon && <Icon className={cn('h-4 w-4', severityStyles[finding.severity]?.replace(/bg-(\w+)-(\d+)/, 'text-$1-$2').replace('text-white', 'text-inherit'))} />}
+                                          </div>
+                                          <div className='flex-1'>
+                                              <div className='flex items-center gap-2 mb-1'>
+                                                  <Badge variant='outline' className={cn(severityStyles[finding.severity])}>{finding.severity}</Badge>
+                                                  <div className='flex items-center gap-1 text-xs text-muted-foreground'>
+                                                      {typeIcons[finding.type]}
+                                                      <span>{finding.type}</span>
+                                                  </div>
+                                              </div>
+                                              <p className="text-muted-foreground">{finding.message}</p>
+                                          </div>
+                                      </div>
+                                      {finding.suggestion && (
+                                          <>
+                                              <Separator className='my-2'/>
+                                              <div className="flex items-start gap-3 text-muted-foreground">
+                                                  <Lightbulb className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+                                                  <div className="flex-1">
+                                                      <span className="font-semibold text-foreground/90">Suggestion: </span>
+                                                      {finding.suggestion}
+                                                  </div>
+                                              </div>
+                                          </>
+                                      )}
+                                  </li>
+                              );
+                          })}
+                      </ul>
+                  </div>
+              )}
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   );
 }
+
+    

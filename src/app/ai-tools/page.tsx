@@ -22,7 +22,7 @@ export default function AiToolsPage() {
       </p>
 
       <Tabs defaultValue="policy-generator">
-        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 md:grid-cols-5">
+        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 md:grid-cols-6">
           <TabsTrigger value="policy-generator">Policy Generator</TabsTrigger>
           <TabsTrigger value="policy-validation">Validation</TabsTrigger>
           <TabsTrigger value="policy-simulation">Simulation</TabsTrigger>
@@ -44,21 +44,73 @@ export default function AiToolsPage() {
           </Card>
         </TabsContent>
         <TabsContent value="policy-validation">
-          <PolicyValidation />
+          <Card>
+            <CardHeader>
+              <CardTitle>Policy Validation & Conflict Detection</CardTitle>
+              <CardDescription>
+                Check a firewall policy against security best practices and for conflicts.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PolicyValidation />
+            </CardContent>
+          </Card>
         </TabsContent>
         <TabsContent value="policy-simulation">
-          <PolicySimulation />
+          <Card>
+            <CardHeader>
+              <CardTitle>Policy Simulation</CardTitle>
+              <CardDescription>
+                Test how a hypothetical traffic flow would be handled by your policies.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PolicySimulation />
+            </CardContent>
+          </Card>
         </TabsContent>
         <TabsContent value="self-healing">
-          <SelfHealing />
+          <Card>
+            <CardHeader>
+              <CardTitle>Self-Healing Misconfigurations</CardTitle>
+              <CardDescription>
+                Detect and correct firewall misconfigurations automatically.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SelfHealing />
+            </CardContent>
+          </Card>
         </TabsContent>
         <TabsContent value="anomaly-detection">
-          <AnomalyDetection />
+          <Card>
+            <CardHeader>
+              <CardTitle>Admin Anomaly Detection</CardTitle>
+              <CardDescription>
+                Detect anomalous admin actions and access patterns using User Behavior Analytics (UBA).
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AnomalyDetection />
+            </CardContent>
+          </Card>
         </TabsContent>
         <TabsContent value="model-management">
-          <ModelManagement />
+          <Card>
+            <CardHeader>
+              <CardTitle>AI Model Management</CardTitle>
+              <CardDescription>
+                Retrain, evaluate, and version your AI models.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ModelManagement />
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
   );
 }
+
+    

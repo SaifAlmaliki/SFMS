@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -26,6 +26,7 @@ export function NewPolicyDialog() {
   const [open, setOpen] = useState(false);
   const [state, formAction] = useActionState(createPolicyAction, initialState);
   const { toast } = useToast();
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (state.success) {
@@ -34,6 +35,7 @@ export function NewPolicyDialog() {
         description: 'New policy has been created.',
       });
       setOpen(false);
+      formRef.current?.reset();
     }
     if (state.errors?._server) {
         toast({
@@ -42,7 +44,7 @@ export function NewPolicyDialog() {
             description: state.errors._server[0],
         });
     }
-  }, [state, toast]);
+  }, [state]);
 
 
   return (
@@ -60,7 +62,7 @@ export function NewPolicyDialog() {
             Fill in the details to create a new firewall policy, or start from a template.
           </DialogDescription>
         </DialogHeader>
-        <form action={formAction}>
+        <form ref={formRef} action={formAction}>
             <PolicyForm errors={state.errors} submitButtonText="Create Policy" />
         </form>
         <DialogFooter className='pt-4 sm:justify-start border-t'>
@@ -75,3 +77,5 @@ export function NewPolicyDialog() {
     </Dialog>
   );
 }
+
+    

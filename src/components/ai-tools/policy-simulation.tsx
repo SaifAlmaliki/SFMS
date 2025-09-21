@@ -63,59 +63,53 @@ export function PolicySimulation() {
   }, [state, toast]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Policy Simulation</CardTitle>
-        <CardDescription>
-          Test how a hypothetical traffic flow would be handled by your policies.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <form ref={formRef} action={formAction} className="space-y-4">
-          <div>
-            <Label htmlFor="policySet">Policy Set (YAML)</Label>
-            <Textarea
-              id="policySet"
-              name="policySet"
-              placeholder="Paste your full policy set here..."
-              className="h-40 bg-background font-mono"
-            />
-          </div>
-          <div>
-            <Label htmlFor="trafficFlow">Simulated Traffic Flow</Label>
-            <Textarea
-              id="trafficFlow"
-              name="trafficFlow"
-              placeholder="e.g., Traffic from 10.0.1.5 to 8.8.8.8 on TCP port 443"
-              className="h-20 bg-background"
-            />
-          </div>
-          <SubmitButton />
-        </form>
-        {result && (
-          <div className="rounded-md border bg-secondary/50 p-4">
-            <h4 className="font-semibold mb-2 flex items-center">
-              <Bot className="mr-2 h-5 w-5 text-primary" /> Simulation Result
-            </h4>
-            <div className="space-y-2 text-sm">
-                <div className='flex items-center gap-4'>
-                    <p className="font-medium">Action:</p>
-                    <Badge className={cn('text-base', actionStyles[result.action as keyof typeof actionStyles])}>
-                        {result.action}
-                    </Badge>
-                </div>
-              <div>
-                <p className="font-medium">Matched Rule:</p>
-                <p className="text-muted-foreground font-mono">{result.matchedRule}</p>
+    <div className="space-y-4">
+      <form ref={formRef} action={formAction} className="space-y-4">
+        <div>
+          <Label htmlFor="policySet">Policy Set (YAML)</Label>
+          <Textarea
+            id="policySet"
+            name="policySet"
+            placeholder="Paste your full policy set here..."
+            className="h-40 bg-background font-mono"
+          />
+        </div>
+        <div>
+          <Label htmlFor="trafficFlow">Simulated Traffic Flow</Label>
+          <Textarea
+            id="trafficFlow"
+            name="trafficFlow"
+            placeholder="e.g., Traffic from 10.0.1.5 to 8.8.8.8 on TCP port 443"
+            className="h-20 bg-background"
+          />
+        </div>
+        <SubmitButton />
+      </form>
+      {result && (
+        <div className="rounded-md border bg-secondary/50 p-4">
+          <h4 className="font-semibold mb-2 flex items-center">
+            <Bot className="mr-2 h-5 w-5 text-primary" /> Simulation Result
+          </h4>
+          <div className="space-y-2 text-sm">
+              <div className='flex items-center gap-4'>
+                  <p className="font-medium">Action:</p>
+                  <Badge className={cn('text-base', actionStyles[result.action as keyof typeof actionStyles])}>
+                      {result.action}
+                  </Badge>
               </div>
-              <div>
-                <p className="font-medium">Explanation:</p>
-                <p className="text-muted-foreground whitespace-pre-wrap">{result.explanation}</p>
-              </div>
+            <div>
+              <p className="font-medium">Matched Rule:</p>
+              <p className="text-muted-foreground font-mono">{result.matchedRule}</p>
+            </div>
+            <div>
+              <p className="font-medium">Explanation:</p>
+              <p className="text-muted-foreground whitespace-pre-wrap">{result.explanation}</p>
             </div>
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   );
 }
+
+    

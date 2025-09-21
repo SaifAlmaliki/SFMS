@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -25,6 +25,7 @@ export function EditPolicyDialog({ policy }: { policy: Policy }) {
   const [open, setOpen] = useState(false);
   const [state, formAction] = useActionState(updatePolicyAction, initialState);
   const { toast } = useToast();
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (state.success) {
@@ -33,6 +34,7 @@ export function EditPolicyDialog({ policy }: { policy: Policy }) {
         description: 'Policy has been updated.',
       });
       setOpen(false);
+      formRef.current?.reset();
     }
     if (state.errors?._server) {
         toast({
@@ -41,7 +43,7 @@ export function EditPolicyDialog({ policy }: { policy: Policy }) {
             description: state.errors._server[0],
         });
     }
-  }, [state, toast]);
+  }, [state]);
 
 
   return (
@@ -59,10 +61,12 @@ export function EditPolicyDialog({ policy }: { policy: Policy }) {
             Update the details for this firewall policy.
           </DialogDescription>
         </DialogHeader>
-        <form action={formAction}>
+        <form ref={formRef} action={formAction}>
             <PolicyForm policy={policy} errors={state.errors} submitButtonText="Update Policy" />
         </form>
       </DialogContent>
     </Dialog>
   );
 }
+
+    

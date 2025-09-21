@@ -55,53 +55,47 @@ export function AnomalyDetection() {
   }, [state, toast]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Admin Anomaly Detection</CardTitle>
-        <CardDescription>
-          Detect anomalous admin actions and access patterns.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <form ref={formRef} action={formAction} className="space-y-4">
-          <div>
-            <Label htmlFor="adminActions">Admin Actions Log</Label>
-            <Textarea
-              id="adminActions"
-              name="adminActions"
-              placeholder="Paste admin action logs here..."
-              className="h-32 bg-background"
-            />
-          </div>
-          <div>
-            <Label htmlFor="accessPatterns">Access Patterns Log</Label>
-            <Textarea
-              id="accessPatterns"
-              name="accessPatterns"
-              placeholder="Paste access pattern logs here..."
-              className="h-32 bg-background"
-            />
-          </div>
-          <SubmitButton />
-        </form>
-        {result && (
-          <div className="rounded-md border bg-secondary/50 p-4">
-            <h4 className="font-semibold mb-2 flex items-center">
-              <Bot className="mr-2 h-5 w-5 text-primary" /> Detection Result
-            </h4>
-            <div className="space-y-2 text-sm">
-              <div>
-                <p className="font-medium">Anomalies:</p>
-                <p className="text-muted-foreground whitespace-pre-wrap">{result.anomalies}</p>
-              </div>
-              <div>
-                <p className="font-medium">Risk Score:</p>
-                <p className="text-muted-foreground">{result.riskScore}</p>
-              </div>
+    <div className="space-y-4">
+      <form ref={formRef} action={formAction} className="space-y-4">
+        <div>
+          <Label htmlFor="adminActions">Admin Actions Log</Label>
+          <Textarea
+            id="adminActions"
+            name="adminActions"
+            placeholder="Paste admin action logs here..."
+            className="h-32 bg-background"
+          />
+        </div>
+        <div>
+          <Label htmlFor="accessPatterns">Access Patterns Log</Label>
+          <Textarea
+            id="accessPatterns"
+            name="accessPatterns"
+            placeholder="Paste access pattern logs here..."
+            className="h-32 bg-background"
+          />
+        </div>
+        <SubmitButton />
+      </form>
+      {result && (
+        <div className="rounded-md border bg-secondary/50 p-4">
+          <h4 className="font-semibold mb-2 flex items-center">
+            <Bot className="mr-2 h-5 w-5 text-primary" /> Detection Result
+          </h4>
+          <div className="space-y-2 text-sm">
+            <div>
+              <p className="font-medium">Anomalies:</p>
+              <p className="text-muted-foreground whitespace-pre-wrap">{result.anomalies}</p>
+            </div>
+            <div>
+              <p className="font-medium">Risk Score:</p>
+              <p className="text-muted-foreground">{result.riskScore}</p>
             </div>
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   );
 }
+
+    
