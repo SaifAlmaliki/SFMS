@@ -33,7 +33,7 @@ export default function DashboardPage() {
 
       <Card className="lg:col-span-3 xl:col-span-2">
         <CardHeader>
-          <CardTitle>AI Policy Generator</CardTitle>
+          <CardTitle className="text-xl">AI Policy Generator</CardTitle>
           <CardDescription>
             Use natural language to generate firewall policies.
           </CardDescription>
@@ -45,7 +45,7 @@ export default function DashboardPage() {
 
       <Card className="lg:col-span-3 xl:col-span-2 row-start-3">
         <CardHeader>
-          <CardTitle>NLP Chatbot Assistance</CardTitle>
+          <CardTitle className="text-xl">NLP Chatbot Assistance</CardTitle>
           <CardDescription>
             Ask questions and get guided assistance.
           </CardDescription>

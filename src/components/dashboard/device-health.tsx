@@ -1,3 +1,5 @@
+'use client';
+
 import {
   Card,
   CardContent,
@@ -6,14 +8,16 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { HardDrive } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
+type DeviceStatus = 'Online' | 'Offline' | 'Warning';
 type Device = {
   name: string;
-  status: 'Online' | 'Offline' | 'Warning';
+  status: DeviceStatus;
   ip: string;
 };
 
-const devices: Device[] = [
+const initialDevices: Device[] = [
   { name: 'FW-Primary-DC1', status: 'Online', ip: '10.1.1.1' },
   { name: 'FW-Secondary-DC1', status: 'Online', ip: '10.1.1.2' },
   { name: 'FW-Branch-Office-A', status: 'Warning', ip: '192.168.1.1' },
@@ -27,11 +31,32 @@ const statusStyles = {
   Warning: 'bg-yellow-500',
 };
 
+const possibleStatuses: DeviceStatus[] = ['Online', 'Offline', 'Warning'];
+
 export function DeviceHealth() {
+  const [devices, setDevices] = useState<Device[]>(initialDevices);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDevices((currentDevices) =>
+        currentDevices.map((device) => {
+          if (Math.random() < 0.1) { // 10% chance to change status
+            const newStatus = possibleStatuses[Math.floor(Math.random() * possibleStatuses.length)];
+            return { ...device, status: newStatus };
+          }
+          return device;
+        })
+      );
+    }, 5000); // Update every 5 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+
   return (
     <Card className="xl:col-span-2">
       <CardHeader>
-        <CardTitle>Device Health</CardTitle>
+        <CardTitle className="text-xl">Device Health</CardTitle>
         <CardDescription>Real-time status of your firewalls.</CardDescription>
       </CardHeader>
       <CardContent>
@@ -47,7 +72,7 @@ export function DeviceHealth() {
               </div>
               <div className="flex items-center gap-2">
                 <span
-                  className={`h-2.5 w-2.5 rounded-full ${
+                  className={`h-2.5 w-2.5 rounded-full transition-colors ${
                     statusStyles[device.status]
                   }`}
                 />
