@@ -19,8 +19,10 @@ import {
   SidebarFooter,
 } from '@/components/ui/sidebar';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 export function SidebarNav() {
+  const pathname = usePathname();
   return (
     <>
       <SidebarHeader>
@@ -36,40 +38,40 @@ export function SidebarNav() {
       <SidebarContent className="p-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive tooltip="Dashboard">
-              <Link href="#">
+            <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
+              <Link href="/">
                 <Home />
                 Dashboard
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Policies">
-              <Link href="#">
+            <SidebarMenuButton asChild isActive={pathname === '/policies'} tooltip="Policies">
+              <Link href="/policies">
                 <FileTerminal />
                 Policies
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Monitoring">
-              <Link href="#">
+            <SidebarMenuButton asChild isActive={pathname === '/monitoring'} tooltip="Monitoring">
+              <Link href="/monitoring">
                 <Gauge />
                 Monitoring
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Compliance">
-              <Link href="#">
+            <SidebarMenuButton asChild isActive={pathname === '/compliance'} tooltip="Compliance">
+              <Link href="/compliance">
                 <ShieldCheck />
                 Compliance
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="AI Tools">
-              <Link href="#">
+            <SidebarMenuButton asChild isActive={pathname === '/ai-tools'} tooltip="AI Tools">
+              <Link href="/ai-tools">
                 <Bot />
                 AI Tools
               </Link>
@@ -80,16 +82,16 @@ export function SidebarNav() {
       <SidebarFooter className="p-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Settings">
-              <Link href="#">
+            <SidebarMenuButton asChild isActive={pathname === '/settings'} tooltip="Settings">
+              <Link href="/settings">
                 <Settings />
                 Settings
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Support">
-              <Link href="#">
+            <SidebarMenuButton asChild isActive={pathname === '/support'} tooltip="Support">
+              <Link href="/support">
                 <LifeBuoy />
                 Support
               </Link>
