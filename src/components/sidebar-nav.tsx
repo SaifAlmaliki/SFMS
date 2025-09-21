@@ -35,7 +35,10 @@ import { useState } from 'react';
 
 export function SidebarNav() {
   const pathname = usePathname();
-  const [isPolicyOpen, setIsPolicyOpen] = useState(pathname.startsWith('/policies') || pathname.startsWith('/templates'));
+  const isPolicyOpen = pathname.startsWith('/policies') || pathname.startsWith('/templates');
+  const [openCollapsibles, setOpenCollapsibles] = useState({
+      policy: isPolicyOpen,
+  });
 
   return (
     <>
@@ -60,39 +63,37 @@ export function SidebarNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           
-          <SidebarMenuItem>
-            <Collapsible open={isPolicyOpen} onOpenChange={setIsPolicyOpen} asChild>
-              <>
-              <CollapsibleTrigger asChild>
-                <SidebarMenuButton isActive={isPolicyOpen} className='justify-between' tooltip='Policy Management'>
-                  <div className='flex items-center gap-2'>
-                    <FileTerminal />
-                    Policies
-                  </div>
-                  <ChevronDown className={cn('h-4 w-4 transition-transform', isPolicyOpen && 'rotate-180')} />
-                </SidebarMenuButton>
-              </CollapsibleTrigger>
-              <CollapsibleContent className='pl-4'>
-                <SidebarMenu className='py-2'>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={pathname === '/policies'} size="sm">
-                        <Link href="/policies">
-                          All Policies
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild isActive={pathname === '/templates'} size="sm">
-                        <Link href="/templates">
-                          Templates
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                </SidebarMenu>
-              </CollapsibleContent>
-              </>
-            </Collapsible>
-          </SidebarMenuItem>
+          <Collapsible asChild open={openCollapsibles.policy} onOpenChange={(isOpen) => setOpenCollapsibles(prev => ({...prev, policy: isOpen}))}>
+            <SidebarMenuItem>
+                <CollapsibleTrigger asChild>
+                    <SidebarMenuButton isActive={isPolicyOpen} className='justify-between' tooltip='Policy Management'>
+                    <div className='flex items-center gap-2'>
+                        <FileTerminal />
+                        Policies
+                    </div>
+                    <ChevronDown className={cn('h-4 w-4 transition-transform', openCollapsibles.policy && 'rotate-180')} />
+                    </SidebarMenuButton>
+                </CollapsibleTrigger>
+                <CollapsibleContent className='pl-4'>
+                    <SidebarMenu className='py-2'>
+                        <SidebarMenuItem>
+                        <SidebarMenuButton asChild isActive={pathname === '/policies'} size="sm">
+                            <Link href="/policies">
+                            All Policies
+                            </Link>
+                        </SidebarMenuButton>
+                        </SidebarMenuItem>
+                        <SidebarMenuItem>
+                        <SidebarMenuButton asChild isActive={pathname === '/templates'} size="sm">
+                            <Link href="/templates">
+                            Templates
+                            </Link>
+                        </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    </SidebarMenu>
+                </CollapsibleContent>
+            </SidebarMenuItem>
+          </Collapsible>
 
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname === '/network-objects'} tooltip="Network Objects">
