@@ -60,8 +60,9 @@ export function SidebarNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           
-          <SidebarMenuItem asChild>
-            <Collapsible open={isPolicyOpen} onOpenChange={setIsPolicyOpen}>
+          <SidebarMenuItem>
+            <Collapsible open={isPolicyOpen} onOpenChange={setIsPolicyOpen} asChild>
+              <>
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton isActive={isPolicyOpen} className='justify-between' tooltip='Policy Management'>
                   <div className='flex items-center gap-2'>
@@ -89,6 +90,7 @@ export function SidebarNav() {
                     </SidebarMenuItem>
                 </SidebarMenu>
               </CollapsibleContent>
+              </>
             </Collapsible>
           </SidebarMenuItem>
 
