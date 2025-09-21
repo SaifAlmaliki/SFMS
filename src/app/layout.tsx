@@ -4,6 +4,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/toaster';
 import { AppLayout } from '@/components/layout';
 import { cn } from '@/lib/utils';
+import { ThemeProvider } from '@/components/theme-provider';
 
 export const metadata: Metadata = {
   title: 'AI Firewall Automation Platform',
@@ -25,11 +26,18 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className={cn('font-body antialiased', 'dark')} suppressHydrationWarning>
-        <SidebarProvider>
-          <AppLayout>{children}</AppLayout>
-        </SidebarProvider>
-        <Toaster />
+      <body className={cn('font-body antialiased')} suppressHydrationWarning>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <SidebarProvider>
+            <AppLayout>{children}</AppLayout>
+          </SidebarProvider>
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );
