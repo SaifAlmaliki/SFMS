@@ -1,6 +1,6 @@
 
 import { notFound } from 'next/navigation';
-import { getComplianceReportByFramework } from '@/lib/data';
+import { getComplianceReportByFramework, getComplianceReports } from '@/lib/data';
 import {
   Card,
   CardContent,
