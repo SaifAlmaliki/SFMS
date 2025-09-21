@@ -1,5 +1,6 @@
 
 
+
 export type UserRole = 'Administrator' | 'Editor' | 'Viewer';
 
 export type Policy = {
@@ -22,7 +23,32 @@ export type Snapshot = {
 export type Device = {
     name: string;
     ip: string;
-  };
+};
+
+export type AddressObject = {
+    id: string;
+    name: string;
+    type: 'IP/Range' | 'FQDN' | 'Geography';
+    value: string;
+    description: string;
+};
+
+export type ServiceObject = {
+    id: string;
+    name: string;
+    protocol: 'TCP' | 'UDP' | 'ICMP';
+    portRange: string;
+    description: string;
+};
+
+export type ObjectGroup = {
+    id: string;
+    name: string;
+    type: 'Address' | 'Service';
+    members: string[]; // Array of object IDs
+    description: string;
+};
+
 
 let policies: Policy[] = [
   {
@@ -81,6 +107,25 @@ const devices: Device[] = [
     { name: 'FW-Cloud-VPC', ip: '172.16.0.1' },
     { name: 'FW-DMZ', ip: '10.100.1.5' },
   ];
+
+const addressObjects: AddressObject[] = [
+    { id: 'ADDR-001', name: 'Internal-Network', type: 'IP/Range', value: '10.0.0.0/8', description: 'Main internal corporate network.' },
+    { id: 'ADDR-002', name: 'Web-Server-VIP', type: 'IP/Range', value: '192.0.2.10', description: 'Public VIP for web servers.' },
+    { id: 'ADDR-003', name: 'google.com', type: 'FQDN', value: 'google.com', description: 'Google main domain.' },
+    { id: 'ADDR-004', name: 'United-States-Geo', type: 'Geography', value: 'US', description: 'IP addresses geolocated to the USA.' },
+];
+
+const serviceObjects: ServiceObject[] = [
+    { id: 'SVC-001', name: 'HTTP', protocol: 'TCP', portRange: '80', description: 'Standard HTTP port.' },
+    { id: 'SVC-002', name: 'HTTPS', protocol: 'TCP', portRange: '443', description: 'Standard HTTPS port.' },
+    { id: 'SVC-003', name: 'SSH', protocol: 'TCP', portRange: '22', description: 'Secure Shell access.' },
+    { id: 'SVC-004', name: 'DNS', protocol: 'UDP', portRange: '53', description: 'Domain Name System.' },
+];
+
+const objectGroups: ObjectGroup[] = [
+    { id: 'GRP-001', name: 'Web-Services', type: 'Service', members: ['SVC-001', 'SVC-002'], description: 'Group for all standard web protocols.' },
+    { id: 'GRP-002', name 'Allowed-Public-Sites', type: 'Address', members: ['ADDR-003'], description: 'Group of FQDNs for allowed public websites.' },
+];
 
 const complianceControlData = {
     'PCI DSS': [
@@ -171,6 +216,18 @@ export function getRecentActivities() {
 
 export function getDevices() {
     return devices;
+}
+
+export function getAddressObjects() {
+    return addressObjects;
+}
+
+export function getServiceObjects() {
+    return serviceObjects;
+}
+
+export function getObjectGroups() {
+    return objectGroups;
 }
 
 export function addPolicy(policy: Omit<Policy, 'id'>) {

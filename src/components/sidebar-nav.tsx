@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   Radiation,
   Database,
+  Network,
 } from 'lucide-react';
 import {
   SidebarHeader,
@@ -56,6 +57,14 @@ export function SidebarNav() {
               <Link href="/policies">
                 <FileTerminal />
                 Policies
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname === '/network-objects'} tooltip="Network Objects">
+              <Link href="/network-objects">
+                <Network />
+                Network Objects
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
