@@ -7,10 +7,9 @@ import {
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PolicyGenerator } from '@/components/dashboard/policy-generator';
-import { Textarea } from '@/components/ui/textarea';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
+import { SelfHealing } from '@/components/ai-tools/self-healing';
+import { AnomalyDetection } from '@/components/ai-tools/anomaly-detection';
+import { ModelManagement } from '@/components/ai-tools/model-management';
 
 export default function AiToolsPage() {
   return (
@@ -41,79 +40,13 @@ export default function AiToolsPage() {
           </Card>
         </TabsContent>
         <TabsContent value="self-healing">
-          <Card>
-            <CardHeader>
-              <CardTitle>Self-Healing Misconfigurations</CardTitle>
-              <CardDescription>
-                Detect and correct firewall misconfigurations automatically.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label>Firewall Configuration (JSON/YAML)</Label>
-                <Textarea placeholder="Paste your configuration here..." className="h-32 bg-background"/>
-              </div>
-              <div>
-                <Label>Guardrails (JSON/YAML)</Label>
-                <Textarea placeholder="Paste your guardrails here..." className="h-32 bg-background"/>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch id="auto-correct" />
-                <Label htmlFor="auto-correct">Auto-Correct</Label>
-              </div>
-              <Button>Analyze and Correct</Button>
-            </CardContent>
-          </Card>
+            <SelfHealing />
         </TabsContent>
         <TabsContent value="anomaly-detection">
-          <Card>
-            <CardHeader>
-              <CardTitle>Admin Anomaly Detection</CardTitle>
-              <CardDescription>
-                Detect anomalous admin actions and access patterns.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label>Admin Actions Log</Label>
-                <Textarea placeholder="Paste admin action logs here..." className="h-32 bg-background"/>
-              </div>
-              <div>
-                <Label>Access Patterns Log</Label>
-                <Textarea placeholder="Paste access pattern logs here..." className="h-32 bg-background"/>
-              </div>
-              <Button>Detect Anomalies</Button>
-            </CardContent>
-          </Card>
+            <AnomalyDetection />
         </TabsContent>
         <TabsContent value="model-management">
-          <Card>
-            <CardHeader>
-              <CardTitle>AI Model Management</CardTitle>
-              <CardDescription>
-                Retrain, evaluate, and version your AI models.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-               <div>
-                <Label>Model Name</Label>
-                <Textarea placeholder="Enter model name..." className="h-12 bg-background"/>
-              </div>
-               <div className="flex items-center space-x-2">
-                <Switch id="retrain" />
-                <Label htmlFor="retrain">Retrain</Label>
-              </div>
-               <div className="flex items-center space-x-2">
-                <Switch id="evaluate" />
-                <Label htmlFor="evaluate">Evaluate</Label>
-              </div>
-               <div className="flex items-center space-x-2">
-                <Switch id="version" />
-                <Label htmlFor="version">Version</Label>
-              </div>
-              <Button>Run Management Task</Button>
-            </CardContent>
-          </Card>
+            <ModelManagement />
         </TabsContent>
       </Tabs>
     </div>
