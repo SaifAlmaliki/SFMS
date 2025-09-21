@@ -71,10 +71,10 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form className="space-y-4" onSubmit={handleProfileUpdate}>
+              <form className="space-y-4" onSubmit={handleProfileUpdate} suppressHydrationWarning>
                 <div className="space-y-2">
                   <Label htmlFor="name">Name</Label>
-                  <Input id="name" defaultValue="Admin" suppressHydrationWarning />
+                  <Input id="name" defaultValue="Admin" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
@@ -82,7 +82,6 @@ export default function SettingsPage() {
                     id="email"
                     type="email"
                     defaultValue="admin@example.com"
-                    suppressHydrationWarning
                   />
                 </div>
                 <Button type="submit">Update Profile</Button>
@@ -96,18 +95,18 @@ export default function SettingsPage() {
               <CardDescription>Change your password.</CardDescription>
             </CardHeader>
             <CardContent>
-              <form className="space-y-4" onSubmit={handlePasswordChange}>
+              <form className="space-y-4" onSubmit={handlePasswordChange} suppressHydrationWarning>
                 <div className="space-y-2">
                   <Label htmlFor="current-password">Current Password</Label>
-                  <Input id="current-password" type="password" suppressHydrationWarning />
+                  <Input id="current-password" type="password" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="new-password">New Password</Label>
-                  <Input id="new-password" name="new-password" type="password" suppressHydrationWarning />
+                  <Input id="new-password" name="new-password" type="password" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confirm-password">Confirm New Password</Label>
-                  <Input id="confirm-password" name="confirm-password" type="password" suppressHydrationWarning />
+                  <Input id="confirm-password" name="confirm-password" type="password" />
                 </div>
                 <Button type="submit">Change Password</Button>
               </form>
