@@ -42,7 +42,9 @@ export default function PoliciesPage() {
             Manage and view your firewall policies.
           </p>
         </div>
-        <NewPolicyDialog />
+        <div className='flex items-center gap-2'>
+          <NewPolicyDialog />
+        </div>
       </div>
 
       <Card>

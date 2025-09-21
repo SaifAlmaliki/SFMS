@@ -13,8 +13,9 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { createPolicyAction } from '@/app/actions';
-import { PlusCircle } from 'lucide-react';
+import { Library, PlusCircle } from 'lucide-react';
 import { PolicyForm } from './policy-form';
+import Link from 'next/link';
 
 const initialState = {
     errors: {},
@@ -56,12 +57,20 @@ export function NewPolicyDialog() {
         <DialogHeader>
           <DialogTitle>Create New Policy</DialogTitle>
           <DialogDescription>
-            Fill in the details to create a new firewall policy.
+            Fill in the details to create a new firewall policy, or start from a template.
           </DialogDescription>
         </DialogHeader>
         <form action={formAction}>
             <PolicyForm errors={state.errors} submitButtonText="Create Policy" />
         </form>
+        <DialogFooter className='pt-4 sm:justify-start border-t'>
+          <Button variant="outline" asChild>
+            <Link href="/templates">
+              <Library className="mr-2 h-4 w-4" />
+              Browse Templates
+            </Link>
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

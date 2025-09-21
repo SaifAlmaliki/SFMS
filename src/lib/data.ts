@@ -2,6 +2,7 @@
 
 
 
+
 export type UserRole = 'Administrator' | 'Editor' | 'Viewer';
 
 export type Policy = {
@@ -50,13 +51,21 @@ export type ObjectGroup = {
     description: string;
 };
 
+export type PolicyTemplate = {
+    id: string;
+    name: string;
+    description: string;
+    category: 'Security' | 'Compliance' | 'Operations';
+    policy: Partial<Omit<Policy, 'id' | 'name' | 'status'>>;
+};
+
 
 let policies: Policy[] = [
   {
     id: 'POL-001',
     name: 'Allow HTTP/HTTPS from Internal to DMZ',
-    source: 'Internal',
-    destination: 'DMZ',
+    source: 'Internal-Network',
+    destination: 'Web-Server-VIP',
     action: 'Allow',
     status: 'Active',
   },
@@ -64,7 +73,7 @@ let policies: Policy[] = [
     id: 'POL-002',
     name: 'Block all traffic from Public to Internal',
     source: 'Public',
-    destination: 'Internal',
+    destination: 'Internal-Network',
     action: 'Deny',
     status: 'Active',
   },
@@ -127,6 +136,14 @@ const objectGroups: ObjectGroup[] = [
     { id: 'GRP-001', name: 'Web-Services', type: 'Service', members: ['SVC-001', 'SVC-002'], description: 'Group for all standard web protocols.' },
     { id: 'GRP-002', name: 'Allowed-Public-Sites', type: 'Address', members: ['ADDR-003'], description: 'Group of FQDNs for allowed public websites.' },
 ];
+
+const policyTemplates: PolicyTemplate[] = [
+    { id: 'TPL-001', name: 'Allow Web Access', description: 'Standard policy for allowing egress web traffic (HTTP/HTTPS).', category: 'Security', policy: { source: 'Internal-Network', destination: 'Any', action: 'Allow' } },
+    { id: 'TPL-002', name: 'Block Risky Ports', description: 'Deny common risky protocols like Telnet and FTP from any source.', category: 'Security', policy: { source: 'Any', destination: 'Any', action: 'Deny' } },
+    { id: 'TPL-003', name: 'PCI Compliance Baseline', description: 'Base policy to ensure traffic to cardholder data environment is blocked by default.', category: 'Compliance', policy: { source: 'Any', destination: 'PCI-Zone', action: 'Deny' } },
+    { id: 'TPL-004', name: 'Allow Admin Access', description: 'Permit SSH and RDP from the dedicated admin network to any internal server.', category: 'Operations', policy: { source: 'Admin-Network', destination: 'Internal-Network', action: 'Allow' } },
+];
+
 
 const complianceControlData = {
     'PCI DSS': [
@@ -197,6 +214,10 @@ const recentActivities = [
 
 export function getPolicies() {
     return policies;
+}
+
+export function getPolicyTemplates() {
+    return policyTemplates;
 }
 
 export function getSnapshots() {
