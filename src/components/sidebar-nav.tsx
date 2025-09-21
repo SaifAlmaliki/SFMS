@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  Firewall,
+  FileTerminal,
   Gauge,
   Home,
   ShieldCheck,
@@ -46,7 +46,7 @@ export function SidebarNav() {
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Policies">
               <Link href="#">
-                <Firewall />
+                <FileTerminal />
                 Policies
               </Link>
             </SidebarMenuButton>
