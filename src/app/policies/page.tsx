@@ -14,12 +14,23 @@ import {
   TableCell,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { getPolicies } from '@/lib/data';
+import { getPolicies, Policy } from '@/lib/data';
 import { NewPolicyDialog } from '@/components/policies/new-policy-dialog';
 import { PolicyActions } from '@/components/policies/policy-actions';
 
+const statusStyles: Record<Policy['status'], string> = {
+  Active: 'bg-green-500/20 text-green-500 border-green-500/20',
+  Inactive: 'bg-gray-500/20 text-gray-500 border-gray-500/20',
+  'Pending Approval': 'bg-yellow-500/20 text-yellow-500 border-yellow-500/20',
+};
+
+
 export default function PoliciesPage() {
   const policies = getPolicies();
+  // In a real app, you would get the current user's role from your auth system.
+  // We'll mock it here for demonstration.
+  const currentUserRole = 'Administrator'; 
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-start">
@@ -71,16 +82,14 @@ export default function PoliciesPage() {
                   </TableCell>
                   <TableCell>
                     <Badge
-                      variant={
-                        policy.status === 'Active' ? 'secondary' : 'outline'
-                      }
-                      className={policy.status === 'Active' ? 'bg-green-500/20 text-green-500 border-green-500/20' : ''}
+                      variant='outline'
+                      className={statusStyles[policy.status]}
                     >
                       {policy.status}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <PolicyActions policy={policy} />
+                    <PolicyActions policy={policy} currentUserRole={currentUserRole} />
                   </TableCell>
                 </TableRow>
               ))}

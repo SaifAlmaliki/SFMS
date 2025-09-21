@@ -1,11 +1,13 @@
 
-type Policy = {
+export type UserRole = 'Administrator' | 'Editor' | 'Viewer';
+
+export type Policy = {
     id: string;
     name: string;
     source: string;
     destination: string;
     action: 'Allow' | 'Deny';
-    status: 'Active' | 'Inactive';
+    status: 'Active' | 'Inactive' | 'Pending Approval';
 };
 
 let policies: Policy[] = [
@@ -31,7 +33,7 @@ let policies: Policy[] = [
     source: 'App-Servers',
     destination: 'DB-Servers',
     action: 'Allow',
-    status: 'Inactive',
+    status: 'Pending Approval',
   },
   {
     id: 'POL-004',
@@ -41,6 +43,14 @@ let policies: Policy[] = [
     action: 'Allow',
     status: 'Active',
   },
+  {
+    id: 'POL-005',
+    name: 'Allow Jenkins to access Kubernetes',
+    source: 'Jenkins-Server',
+    destination: 'K8s-API',
+    action: 'Allow',
+    status: 'Inactive',
+  }
 ];
 
 const complianceReports = [
@@ -100,8 +110,8 @@ export function addPolicy(policy: Omit<Policy, 'id'>) {
     return policies;
 }
 
-export function updatePolicy(updatedPolicy: Policy) {
-    policies = policies.map(p => p.id === updatedPolicy.id ? updatedPolicy : p);
+export function updatePolicy(updatedPolicy: Partial<Policy> & { id: string }) {
+    policies = policies.map(p => p.id === updatedPolicy.id ? { ...p, ...updatedPolicy } : p);
     return policies;
 }
 

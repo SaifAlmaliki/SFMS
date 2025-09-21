@@ -41,7 +41,7 @@ const newPolicySchema = z.object({
     source: z.string().min(1, 'Source is required.'),
     destination: z.string().min(1, 'Destination is required.'),
     action: z.enum(['Allow', 'Deny']),
-    status: z.enum(['Active', 'Inactive']),
+    status: z.enum(['Active', 'Inactive', 'Pending Approval']),
 });
 
 export async function createPolicyAction(prevState: any, formData: FormData) {
@@ -50,7 +50,9 @@ export async function createPolicyAction(prevState: any, formData: FormData) {
         source: formData.get('source'),
         destination: formData.get('destination'),
         action: formData.get('action'),
-        status: formData.get('status'),
+        // For now, let's assume a non-admin user is creating policies.
+        // In a real app, you'd check the user's role.
+        status: 'Pending Approval',
     });
 
     if (!validatedFields.success) {
@@ -119,6 +121,41 @@ export async function deletePolicyAction(prevState: any, formData: FormData) {
         return {
             error: 'Failed to delete policy. Please try again.',
         };
+    }
+}
+
+const policyDecisionSchema = z.object({
+    id: z.string(),
+});
+
+export async function approvePolicyAction(prevState: any, formData: FormData) {
+    const validatedFields = policyDecisionSchema.safeParse({ id: formData.get('id') });
+    if (!validatedFields.success) {
+        return { error: 'Invalid Policy ID.' };
+    }
+    try {
+        const policy = updatePolicy({ id: validatedFields.data.id, status: 'Active' });
+        revalidatePath('/policies');
+        return { success: true };
+    } catch (e) {
+        return { error: 'Failed to approve policy.' };
+    }
+}
+
+
+export async function rejectPolicyAction(prevState: any, formData: FormData) {
+    const validatedFields = policyDecisionSchema.safeParse({ id: formData.get('id') });
+    if (!validatedFields.success) {
+        return { error: 'Invalid Policy ID.' };
+    }
+    try {
+        // Here you might want to delete it or move it to a 'rejected' state.
+        // For simplicity, we'll delete it.
+        deletePolicy(validatedFields.data.id);
+        revalidatePath('/policies');
+        return { success: true };
+    } catch (e) {
+        return { error: 'Failed to reject policy.' };
     }
 }
 

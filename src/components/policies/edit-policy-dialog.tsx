@@ -6,7 +6,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -15,15 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { updatePolicyAction } from '@/app/actions';
 import { Pencil } from 'lucide-react';
 import { PolicyForm } from './policy-form';
-
-type Policy = {
-    id: string;
-    name: string;
-    source: string;
-    destination: string;
-    action: 'Allow' | 'Deny';
-    status: 'Active' | 'Inactive';
-};
+import type { Policy } from '@/lib/data';
 
 const initialState = {
     errors: {},

@@ -2,22 +2,33 @@
 
 import { DeletePolicyDialog } from "./delete-policy-dialog";
 import { EditPolicyDialog } from "./edit-policy-dialog";
+import type { Policy, UserRole } from "@/lib/data";
+import { ApproveAction } from "./approve-action";
+import { RejectAction } from "./reject-action";
 
-type Policy = {
-    id: string;
-    name: string;
-    source: string;
-    destination: string;
-    action: 'Allow' | 'Deny';
-    status: 'Active' | 'Inactive';
-};
+interface PolicyActionsProps {
+    policy: Policy;
+    currentUserRole: UserRole;
+}
 
+export function PolicyActions({ policy, currentUserRole }: PolicyActionsProps) {
+    const isPending = policy.status === 'Pending Approval';
+    const isAdmin = currentUserRole === 'Administrator';
 
-export function PolicyActions({ policy }: { policy: Policy }) {
     return (
         <div className="flex items-center justify-end gap-2">
-            <EditPolicyDialog policy={policy} />
-            <DeletePolicyDialog policyId={policy.id} />
+            {isPending && isAdmin && (
+                <>
+                    <ApproveAction policyId={policy.id} />
+                    <RejectAction policyId={policy.id} />
+                </>
+            )}
+            {!isPending && (
+                <>
+                    <EditPolicyDialog policy={policy} />
+                    <DeletePolicyDialog policyId={policy.id} />
+                </>
+            )}
         </div>
     )
 }

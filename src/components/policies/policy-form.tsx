@@ -11,24 +11,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-
-type Policy = {
-    id: string;
-    name: string;
-    source: string;
-    destination: string;
-    action: 'Allow' | 'Deny';
-    status: 'Active' | 'Inactive';
-};
+import type { Policy } from '@/lib/data';
 
 interface PolicyFormProps {
-    policy?: Policy;
+    policy?: Omit<Policy, 'id'> & { id?: string };
     errors?: any;
     submitButtonText: string;
 }
 
 export function PolicyForm({ policy, errors, submitButtonText }: PolicyFormProps) {
   const { pending } = useFormStatus();
+  const availableStatuses = policy?.id ? ['Active', 'Inactive'] : [];
 
   return (
     <div className="grid gap-4 py-4">
@@ -69,6 +62,7 @@ export function PolicyForm({ policy, errors, submitButtonText }: PolicyFormProps
             </Select>
              {errors?.action && <p className="col-span-4 text-xs text-red-500 text-right">{errors.action[0]}</p>}
         </div>
+        {policy?.id && (
         <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="status" className="text-right">
             Status
@@ -78,12 +72,14 @@ export function PolicyForm({ policy, errors, submitButtonText }: PolicyFormProps
                 <SelectValue placeholder="Select a status" />
             </SelectTrigger>
             <SelectContent>
-                <SelectItem value="Active">Active</SelectItem>
-                <SelectItem value="Inactive">Inactive</SelectItem>
+                {availableStatuses.map(status => (
+                     <SelectItem key={status} value={status}>{status}</SelectItem>
+                ))}
             </SelectContent>
             </Select>
             {errors?.status && <p className="col-span-4 text-xs text-red-500 text-right">{errors.status[0]}</p>}
         </div>
+        )}
         <div className="flex justify-end">
             <Button type="submit" disabled={pending}>
                 {pending ? 'Saving...' : submitButtonText}
