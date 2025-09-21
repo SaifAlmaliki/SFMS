@@ -7,7 +7,9 @@ import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -27,15 +29,14 @@ export function PolicyForm({ policy, errors, submitButtonText }: PolicyFormProps
   const addressObjects = getAddressObjects();
   const addressGroups = getObjectGroups().filter(g => g.type === 'Address');
   const networkObjectOptions = [
-    { label: 'Address Objects', options: addressObjects.map(o => ({ value: o.name, label: o.name })) },
-    { label: 'Address Groups', options: addressGroups.map(o => ({ value: o.name, label: o.name })) },
-    // Add other generic options if needed
     { label: 'Default Zones', options: [
         { value: 'Internal', label: 'Internal' },
         { value: 'Public', label: 'Public' },
         { value: 'DMZ', label: 'DMZ' },
         { value: 'Any', label: 'Any' },
     ] },
+    { label: 'Address Groups', options: addressGroups.map(o => ({ value: o.name, label: o.name })) },
+    { label: 'Address Objects', options: addressObjects.map(o => ({ value: o.name, label: o.name })) },
   ];
 
   return (
@@ -58,11 +59,12 @@ export function PolicyForm({ policy, errors, submitButtonText }: PolicyFormProps
                 </SelectTrigger>
                 <SelectContent>
                     {networkObjectOptions.map(group => (
-                        <optgroup key={group.label} label={group.label}>
+                        <SelectGroup key={group.label}>
+                            <SelectLabel>{group.label}</SelectLabel>
                             {group.options.map(option => (
                                 <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                             ))}
-                        </optgroup>
+                        </SelectGroup>
                     ))}
                 </SelectContent>
             </Select>
@@ -78,11 +80,12 @@ export function PolicyForm({ policy, errors, submitButtonText }: PolicyFormProps
                 </SelectTrigger>
                 <SelectContent>
                     {networkObjectOptions.map(group => (
-                        <optgroup key={group.label} label={group.label}>
+                         <SelectGroup key={group.label}>
+                            <SelectLabel>{group.label}</SelectLabel>
                             {group.options.map(option => (
                                 <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                             ))}
-                        </optgroup>
+                        </SelectGroup>
                     ))}
                 </SelectContent>
             </Select>
