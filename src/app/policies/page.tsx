@@ -1,3 +1,4 @@
+
 import {
   Card,
   CardContent,
@@ -17,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { getPolicies, Policy } from '@/lib/data';
 import { NewPolicyDialog } from '@/components/policies/new-policy-dialog';
 import { PolicyActions } from '@/components/policies/policy-actions';
+import { DeployAction } from '@/components/policies/deploy-action';
 
 const statusStyles: Record<Policy['status'], string> = {
   Active: 'bg-green-500/20 text-green-500 border-green-500/20',
@@ -60,6 +62,7 @@ export default function PoliciesPage() {
                 <TableHead>Destination</TableHead>
                 <TableHead>Action</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Deploy</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -87,6 +90,9 @@ export default function PoliciesPage() {
                     >
                       {policy.status}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <DeployAction policy={policy} />
                   </TableCell>
                   <TableCell className="text-right">
                     <PolicyActions policy={policy} currentUserRole={currentUserRole} />

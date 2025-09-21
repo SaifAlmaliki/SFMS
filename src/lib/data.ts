@@ -19,6 +19,11 @@ export type Snapshot = {
     status: 'Live' | 'Archived';
 };
 
+export type Device = {
+    name: string;
+    ip: string;
+  };
+
 let policies: Policy[] = [
   {
     id: 'POL-001',
@@ -68,6 +73,14 @@ let snapshots: Snapshot[] = [
     { version: 'v1.2.1', comment: 'Emergency patch for CVE-2024-XXXX.', author: 'System', date: '2024-07-24', status: 'Archived' },
     { version: 'v1.2.0', comment: 'Quarterly rule cleanup.', author: 'Alice', date: '2024-07-20', status: 'Archived' },
 ];
+
+const devices: Device[] = [
+    { name: 'FW-Primary-DC1', ip: '10.1.1.1' },
+    { name: 'FW-Secondary-DC1', ip: '10.1.1.2' },
+    { name: 'FW-Branch-Office-A', ip: '192.168.1.1' },
+    { name: 'FW-Cloud-VPC', ip: '172.16.0.1' },
+    { name: 'FW-DMZ', ip: '10.100.1.5' },
+  ];
 
 const complianceControlData = {
     'PCI DSS': [
@@ -154,6 +167,10 @@ export function getComplianceReportByFramework(framework: string) {
 
 export function getRecentActivities() {
     return recentActivities;
+}
+
+export function getDevices() {
+    return devices;
 }
 
 export function addPolicy(policy: Omit<Policy, 'id'>) {

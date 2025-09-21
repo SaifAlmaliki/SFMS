@@ -9,6 +9,7 @@ import {
     CardTitle,
   } from '@/components/ui/card';
 import { Save } from 'lucide-react';
+import { ScheduleSnapshotDialog } from '@/components/configuration/schedule-snapshot-dialog';
   
   export default function ConfigurationPage() {
     return (
@@ -20,7 +21,10 @@ import { Save } from 'lucide-react';
                     Manage configuration snapshots, rollbacks, and policy deployments.
                 </p>
             </div>
-            <Button><Save className='h-4 w-4 mr-2' /> Create Snapshot</Button>
+            <div className='flex items-center gap-2'>
+                <ScheduleSnapshotDialog />
+                <Button><Save className='h-4 w-4 mr-2' /> Create Snapshot</Button>
+            </div>
         </div>
 
         <Card>
