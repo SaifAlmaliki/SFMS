@@ -1,6 +1,7 @@
 
 
 
+
 export type UserRole = 'Administrator' | 'Editor' | 'Viewer';
 
 export type Policy = {
@@ -124,7 +125,7 @@ const serviceObjects: ServiceObject[] = [
 
 const objectGroups: ObjectGroup[] = [
     { id: 'GRP-001', name: 'Web-Services', type: 'Service', members: ['SVC-001', 'SVC-002'], description: 'Group for all standard web protocols.' },
-    { id: 'GRP-002', name 'Allowed-Public-Sites', type: 'Address', members: ['ADDR-003'], description: 'Group of FQDNs for allowed public websites.' },
+    { id: 'GRP-002', name: 'Allowed-Public-Sites', type: 'Address', members: ['ADDR-003'], description: 'Group of FQDNs for allowed public websites.' },
 ];
 
 const complianceControlData = {
