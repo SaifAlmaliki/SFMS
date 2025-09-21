@@ -13,6 +13,7 @@ import {
   Wrench,
   BarChart,
   ShieldAlert,
+  Radiation,
 } from 'lucide-react';
 import {
   SidebarHeader,
@@ -102,6 +103,14 @@ export function SidebarNav() {
               <Link href="/automations">
                 <Wrench />
                 Automations
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname === '/response'} tooltip="Incident & Response">
+              <Link href="/response">
+                <Radiation />
+                Incident & Response
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

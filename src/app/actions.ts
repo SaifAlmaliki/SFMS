@@ -8,6 +8,8 @@ import type { ManageRetrainEvaluateVersionInput } from '@/ai/flows/ai-manage-ret
 import { detectAdminAnomalies } from '@/ai/flows/detect-admin-anomalies';
 import { validateFirewallPolicy } from '@/ai/flows/validate-firewall-policy';
 import { simulatePolicy } from '@/ai/flows/simulate-policy';
+import { emulateAdversary } from '@/ai/flows/emulate-adversary';
+import { createIncident } from '@/ai/flows/create-incident';
 import { addPolicy, deletePolicy, updatePolicy } from '@/lib/data';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
@@ -335,6 +337,62 @@ const modelManagementSchema = z.object({
     } catch (e) {
       return {
         error: { _server: ['Failed to run simulation. Please try again.'] },
+      };
+    }
+  }
+
+  const emulateAdversarySchema = z.object({
+    policySet: z.string().min(1, 'Policy set cannot be empty.'),
+    attackTechniqueId: z.string().min(1, 'MITRE ATT&CK Technique ID cannot be empty.'),
+  });
+  
+  export async function emulateAdversaryAction(prevState: any, formData: FormData) {
+    const validatedFields = emulateAdversarySchema.safeParse({
+      policySet: formData.get('policySet'),
+      attackTechniqueId: formData.get('attackTechniqueId'),
+    });
+  
+    if (!validatedFields.success) {
+      return {
+        error: validatedFields.error.flatten().fieldErrors,
+      };
+    }
+  
+    try {
+      const result = await emulateAdversary(validatedFields.data);
+      return {
+        data: result,
+      };
+    } catch (e) {
+      return {
+        error: { _server: ['Failed to run adversary emulation. Please try again.'] },
+      };
+    }
+  }
+  
+  const createIncidentSchema = z.object({
+    eventDescription: z.string().min(10, 'Please provide a more detailed event description.'),
+  });
+  
+  export async function createIncidentAction(prevState: any, formData: FormData) {
+    const validatedFields = createIncidentSchema.safeParse({
+      eventDescription: formData.get('eventDescription'),
+    });
+  
+    if (!validatedFields.success) {
+      return {
+        error: validatedFields.error.flatten().fieldErrors,
+      };
+    }
+  
+    try {
+      const result = await createIncident(validatedFields.data);
+      return {
+        data: result,
+      };
+    } catch (e) {
+      return {
+        error: { _server: ['Failed to create incident. Please try again.'] },
       };
     }
   }
