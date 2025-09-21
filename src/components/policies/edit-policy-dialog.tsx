@@ -43,7 +43,7 @@ export function EditPolicyDialog({ policy }: { policy: Policy }) {
             description: state.errors._server[0],
         });
     }
-  }, [state]);
+  }, [state, toast]);
 
 
   return (
@@ -68,5 +68,3 @@ export function EditPolicyDialog({ policy }: { policy: Policy }) {
     </Dialog>
   );
 }
-
-    

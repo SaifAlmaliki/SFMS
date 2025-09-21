@@ -112,7 +112,7 @@ export async function updatePolicyAction(_prevState: any, formData: FormData) {
     }
 }
 
-export async function deletePolicyAction(_prevState: any, formData: FormData) {
+export async function deletePolicyAction(prevState: any, formData: FormData) {
     const id = formData.get('id') as string;
     if (!id) {
         return { error: 'Policy ID is required.' };
@@ -133,7 +133,7 @@ const policyDecisionSchema = z.object({
     id: z.string(),
 });
 
-export async function approvePolicyAction(_prevState: any, formData: FormData) {
+export async function approvePolicyAction(prevState: any, formData: FormData) {
     const validatedFields = policyDecisionSchema.safeParse({ id: formData.get('id') });
     if (!validatedFields.success) {
         return { error: 'Invalid Policy ID.' };
@@ -148,7 +148,7 @@ export async function approvePolicyAction(_prevState: any, formData: FormData) {
 }
 
 
-export async function rejectPolicyAction(_prevState: any, formData: FormData) {
+export async function rejectPolicyAction(prevState: any, formData: FormData) {
     const validatedFields = policyDecisionSchema.safeParse({ id: formData.get('id') });
     if (!validatedFields.success) {
         return { error: 'Invalid Policy ID.' };
@@ -285,7 +285,7 @@ const modelManagementSchema = z.object({
     }
   }
 
-  export async function rollbackSnapshotAction(_prevState: any, formData: FormData) {
+  export async function rollbackSnapshotAction(prevState: any, formData: FormData) {
     const version = formData.get('version') as string;
     if (!version) {
         return { error: 'Snapshot version is required.' };

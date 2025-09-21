@@ -56,7 +56,7 @@ export function RollbackAction({ snapshot }: { snapshot: Snapshot }) {
         description: state.error,
       });
     }
-  }, [state, snapshot.version]);
+  }, [state, snapshot.version, toast]);
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
@@ -84,5 +84,3 @@ export function RollbackAction({ snapshot }: { snapshot: Snapshot }) {
     </AlertDialog>
   );
 }
-
-    

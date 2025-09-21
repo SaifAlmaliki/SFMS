@@ -111,5 +111,3 @@ export function PolicySimulation() {
     </div>
   );
 }
-
-    

@@ -1,8 +1,4 @@
 
-
-
-
-
 export type UserRole = 'Administrator' | 'Editor' | 'Viewer';
 
 export type Policy = {

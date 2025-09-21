@@ -97,5 +97,3 @@ export function AnomalyDetection() {
     </div>
   );
 }
-
-    

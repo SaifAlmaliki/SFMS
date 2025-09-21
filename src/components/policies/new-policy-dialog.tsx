@@ -44,7 +44,7 @@ export function NewPolicyDialog() {
             description: state.errors._server[0],
         });
     }
-  }, [state]);
+  }, [state, toast]);
 
 
   return (
@@ -77,5 +77,3 @@ export function NewPolicyDialog() {
     </Dialog>
   );
 }
-
-    

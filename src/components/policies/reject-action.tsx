@@ -54,7 +54,7 @@ export function RejectAction({ policyId }: { policyId: string }) {
         description: state.error,
       });
     }
-  }, [state]);
+  }, [state, toast]);
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
@@ -82,5 +82,3 @@ export function RejectAction({ policyId }: { policyId: string }) {
     </AlertDialog>
   );
 }
-
-    

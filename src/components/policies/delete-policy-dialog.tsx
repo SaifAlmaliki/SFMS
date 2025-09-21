@@ -55,7 +55,7 @@ export function DeletePolicyDialog({ policyId }: { policyId: string }) {
             description: state.error,
         });
     }
-  }, [state]);
+  }, [state, toast]);
 
 
   return (
@@ -84,5 +84,3 @@ export function DeletePolicyDialog({ policyId }: { policyId: string }) {
     </AlertDialog>
   );
 }
-
-    
