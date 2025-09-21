@@ -1,7 +1,7 @@
 'use server';
 
 /**
- * @fileOverview Validates a firewall policy against security best practices, including conflict detection.
+ * @fileOverview Validates a firewall policy against security best practices, including conflict detection and resolution suggestions.
  *
  * - validateFirewallPolicy - A function to validate a firewall policy.
  * - ValidateFirewallPolicyInput - The input type for the validateFirewallPolicy function.
@@ -20,9 +20,10 @@ const ValidateFirewallPolicyOutputSchema = z.object({
   isValid: z.boolean().describe('Whether the policy is valid according to best practices.'),
   findings: z.array(z.object({
     severity: z.enum(['Critical', 'High', 'Medium', 'Low', 'Info']),
-    message: z.string(),
+    message: z.string().describe('A descriptive message about the finding.'),
     type: z.enum(['Conflict', 'Security', 'Best Practice', 'General']),
-  })).describe('A list of findings, including severity, a descriptive message, and the type of finding.'),
+    suggestion: z.string().optional().describe('An actionable suggestion to resolve the finding.'),
+  })).describe('A list of findings, including severity, a descriptive message, the type of finding, and a resolution suggestion.'),
 });
 export type ValidateFirewallPolicyOutput = z.infer<typeof ValidateFirewallPolicyOutputSchema>;
 
@@ -50,8 +51,10 @@ Analyze the provided firewall policy for any security issues, conflicts, or viol
   - Deny-by-default: Ensure there isn't an implicit allow.
   - Risky Services: Flag the use of insecure protocols like telnet, ftp, etc.
   - Logging: Ensure logging is enabled for important rules, especially deny rules.
+  - Unused rules or objects.
 
 For each issue found, classify its type as 'Conflict', 'Security', or 'Best Practice'.
+Crucially, for each finding, provide a concrete, actionable suggestion for how to fix it. For example, if two rules overlap, suggest merging them or making one more specific.
 
 Return your findings in the specified output format. If no issues are found, return an empty findings array and set isValid to true.
 

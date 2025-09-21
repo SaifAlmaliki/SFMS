@@ -14,10 +14,11 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Bot, ShieldCheck, ShieldAlert, ShieldQuestion, Info, AlertTriangle, GitMerge, Fingerprint, LucideIcon } from 'lucide-react';
+import { Bot, ShieldCheck, ShieldAlert, ShieldQuestion, Info, AlertTriangle, GitMerge, Fingerprint, Lightbulb } from 'lucide-react';
 import type { ValidateFirewallPolicyOutput } from '@/ai/flows/validate-firewall-policy';
 import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
+import { Separator } from '../ui/separator';
 
 const initialState: {
   data?: ValidateFirewallPolicyOutput;
@@ -35,11 +36,11 @@ function SubmitButton() {
 }
 
 const severityStyles: Record<string, string> = {
-    'Critical': 'bg-red-700 text-white',
-    'High': 'bg-red-500 text-white',
-    'Medium': 'bg-yellow-500 text-white',
-    'Low': 'bg-blue-500 text-white',
-    'Info': 'bg-gray-500 text-white',
+    'Critical': 'bg-red-700 text-white border-red-700',
+    'High': 'bg-red-500 text-white border-red-500',
+    'Medium': 'bg-yellow-500 text-white border-yellow-500',
+    'Low': 'bg-blue-500 text-white border-blue-500',
+    'Info': 'bg-gray-500 text-white border-gray-500',
 };
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -110,31 +111,45 @@ export function PolicyValidation() {
                     {result.isValid ? (
                         <><ShieldCheck className="h-5 w-5 text-accent" /> <span className='font-medium'>Policy is valid. No issues found.</span></>
                     ) : (
-                        <><ShieldAlert className="h-5 w-5 text-destructive" /> <span className='font-medium'>Policy has issues.</span></>
+                        <><ShieldAlert className="h-5 w-5 text-destructive" /> <span className='font-medium'>Policy has {result.findings.length} issue(s).</span></>
                     )}
                 </div>
 
                 {result.findings.length > 0 && (
                     <div>
                         <p className="font-medium mb-2">Findings:</p>
-                        <ul className='space-y-2'>
+                        <ul className='space-y-3'>
                             {result.findings.map((finding, index) => {
                                 const Icon = severityIcons[finding.severity];
                                 return (
-                                    <li key={index} className="flex items-start gap-3 p-2 rounded-md bg-background/50 border">
-                                        <div className="pt-0.5">
-                                            {Icon && <Icon className={cn('h-4 w-4', severityStyles[finding.severity]?.replace('bg-', 'text-'))} />}
-                                        </div>
-                                        <div className='flex-1'>
-                                            <div className='flex items-center gap-2 mb-1'>
-                                                <Badge className={cn(severityStyles[finding.severity])}>{finding.severity}</Badge>
-                                                <div className='flex items-center gap-1 text-xs text-muted-foreground'>
-                                                    {typeIcons[finding.type]}
-                                                    <span>{finding.type}</span>
-                                                </div>
+                                    <li key={index} className="flex flex-col gap-3 p-3 rounded-md bg-background/50 border">
+                                        <div className="flex items-start gap-3">
+                                            <div className="pt-0.5">
+                                                {Icon && <Icon className={cn('h-4 w-4', severityStyles[finding.severity]?.replace(/bg-(\w+)-(\d+)/, 'text-$1-$2').replace('text-white', 'text-inherit'))} />}
                                             </div>
-                                            <p className="text-muted-foreground">{finding.message}</p>
+                                            <div className='flex-1'>
+                                                <div className='flex items-center gap-2 mb-1'>
+                                                    <Badge variant='outline' className={cn(severityStyles[finding.severity])}>{finding.severity}</Badge>
+                                                    <div className='flex items-center gap-1 text-xs text-muted-foreground'>
+                                                        {typeIcons[finding.type]}
+                                                        <span>{finding.type}</span>
+                                                    </div>
+                                                </div>
+                                                <p className="text-muted-foreground">{finding.message}</p>
+                                            </div>
                                         </div>
+                                        {finding.suggestion && (
+                                            <>
+                                                <Separator className='my-2'/>
+                                                <div className="flex items-start gap-3 text-muted-foreground">
+                                                    <Lightbulb className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+                                                    <div className="flex-1">
+                                                        <span className="font-semibold text-foreground/90">Suggestion: </span>
+                                                        {finding.suggestion}
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
                                     </li>
                                 );
                             })}

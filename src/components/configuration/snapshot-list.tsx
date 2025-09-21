@@ -1,7 +1,7 @@
 
 'use client';
 
-import { getSnapshots } from '@/lib/data';
+import { getSnapshots, Snapshot } from '@/lib/data';
 import {
   Table,
   TableHeader,
@@ -10,11 +10,11 @@ import {
   TableBody,
   TableCell,
 } from '@/components/ui/table';
-import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { SnapshotActions } from './snapshot-actions';
 
 export function SnapshotList() {
-  const snapshots = getSnapshots();
+  const snapshots: Snapshot[] = getSnapshots();
 
   return (
     <Table>
@@ -41,10 +41,7 @@ export function SnapshotList() {
               </Badge>
             </TableCell>
             <TableCell className="text-right">
-                <div className='flex items-center justify-end gap-2'>
-                    <Button variant="outline" size="sm">View Diff</Button>
-                    <Button variant="outline" size="sm">Rollback</Button>
-                </div>
+                <SnapshotActions snapshot={snapshot} />
             </TableCell>
           </TableRow>
         ))}

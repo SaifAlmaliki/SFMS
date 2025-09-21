@@ -10,7 +10,7 @@ import { validateFirewallPolicy } from '@/ai/flows/validate-firewall-policy';
 import { simulatePolicy } from '@/ai/flows/simulate-policy';
 import { emulateAdversary } from '@/ai/flows/emulate-adversary';
 import { createIncident } from '@/ai/flows/create-incident';
-import { addPolicy, deletePolicy, updatePolicy } from '@/lib/data';
+import { addPolicy, deletePolicy, updatePolicy, rollbackSnapshot } from '@/lib/data';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
@@ -396,3 +396,20 @@ const modelManagementSchema = z.object({
       };
     }
   }
+
+  export async function rollbackSnapshotAction(prevState: any, formData: FormData) {
+    const version = formData.get('version') as string;
+    if (!version) {
+        return { error: 'Snapshot version is required.' };
+    }
+
+    try {
+        rollbackSnapshot(version);
+        revalidatePath('/configuration');
+        return { success: true };
+    } catch (e) {
+        return {
+            error: 'Failed to rollback snapshot. Please try again.',
+        };
+    }
+}

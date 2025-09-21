@@ -62,7 +62,7 @@ let policies: Policy[] = [
   }
 ];
 
-const snapshots: Snapshot[] = [
+let snapshots: Snapshot[] = [
     { version: 'v1.2.3', comment: 'Initial deployment after audit.', author: 'Alice', date: '2024-07-28', status: 'Live' },
     { version: 'v1.2.2', comment: 'Added rule for new staging server.', author: 'Bob', date: '2024-07-25', status: 'Archived' },
     { version: 'v1.2.1', comment: 'Emergency patch for CVE-2024-XXXX.', author: 'System', date: '2024-07-24', status: 'Archived' },
@@ -170,4 +170,44 @@ export function updatePolicy(updatedPolicy: Partial<Policy> & { id: string }) {
 export function deletePolicy(policyId: string) {
     policies = policies.filter(p => p.id !== policyId);
     return policies;
+}
+
+
+// Snapshot Management
+export function getSnapshotDiff(version: string): string {
+    // This is a mock function. In a real app, you would compute a diff.
+    return `
+- name: Block all traffic from Public to Internal
+  source: Public
+  destination: Internal
+  action: Deny
+  status: Active
++ name: Block ALL traffic from Public to Internal
++  source: ANY-PUBLIC-ZONE
++  destination: Internal-Network
++  action: Deny
++  status: Active
++  log: true
+- name: Allow SSH from Admin Workstations
++ name: Allow SSH from Admin Workstations (LOG)
+   source: Admin-Network
+   destination: Any
+   action: Allow
+   status: Active
++  log: true
+  `;
+  }
+  
+
+export function rollbackSnapshot(version: string) {
+    snapshots = snapshots.map(s => {
+        if (s.version === version) {
+            return { ...s, status: 'Live' };
+        }
+        if (s.status === 'Live') {
+            return { ...s, status: 'Archived' };
+        }
+        return s;
+    });
+    return snapshots;
 }
