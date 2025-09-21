@@ -63,8 +63,8 @@ export function SidebarNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           
-          <Collapsible open={openCollapsibles.policy} onOpenChange={(isOpen) => setOpenCollapsibles(prev => ({...prev, policy: isOpen}))}>
-            <SidebarMenuItem>
+          <SidebarMenuItem>
+            <Collapsible open={openCollapsibles.policy} onOpenChange={(isOpen) => setOpenCollapsibles(prev => ({...prev, policy: isOpen}))}>
                 <CollapsibleTrigger asChild>
                     <SidebarMenuButton isActive={isPolicyOpen} className='justify-between w-full' tooltip='Policy Management'>
                     <div className='flex items-center gap-2'>
@@ -74,26 +74,26 @@ export function SidebarNav() {
                     <ChevronDown className={cn('h-4 w-4 transition-transform', openCollapsibles.policy && 'rotate-180')} />
                     </SidebarMenuButton>
                 </CollapsibleTrigger>
-            </SidebarMenuItem>
-            <CollapsibleContent>
-                <SidebarMenu className='py-2 pl-7'>
-                    <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={pathname === '/policies'} size="sm">
-                        <Link href="/policies">
-                        All Policies
-                        </Link>
-                    </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={pathname === '/templates'} size="sm">
-                        <Link href="/templates">
-                        Templates
-                        </Link>
-                    </SidebarMenuButton>
-                    </SidebarMenuItem>
-                </SidebarMenu>
-            </CollapsibleContent>
-          </Collapsible>
+              <CollapsibleContent>
+                  <SidebarMenu className='py-2 pl-7'>
+                      <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={pathname === '/policies'} size="sm">
+                          <Link href="/policies">
+                          All Policies
+                          </Link>
+                      </SidebarMenuButton>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={pathname === '/templates'} size="sm">
+                          <Link href="/templates">
+                          Templates
+                          </Link>
+                      </SidebarMenuButton>
+                      </SidebarMenuItem>
+                  </SidebarMenu>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarMenuItem>
 
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname === '/network-objects'} tooltip="Network Objects">
