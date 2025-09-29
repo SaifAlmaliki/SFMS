@@ -1,0 +1,113 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Policy {
+  id         String @id // Use custom IDs like POL-001
+  name       String
+  source     String
+  destination String
+  action     PolicyAction // 'Allow' | 'Deny'
+  status     PolicyStatus // 'Active' | 'Inactive' | 'Pending Approval'
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+enum PolicyAction {
+  Allow
+  Deny
+}
+
+enum PolicyStatus {
+  Active
+  Inactive
+  PendingApproval @map("Pending Approval")
+}
+
+model Snapshot {
+  id        String @id @default(cuid())
+  version   String @unique
+  comment   String
+  author    String
+  date      DateTime
+  status    SnapshotStatus // 'Live' | 'Archived'
+  createdAt DateTime @default(now())
+}
+
+enum SnapshotStatus {
+  Live
+  Archived
+}
+
+model Device {
+  id   String @id @default(cuid())
+  name String @unique
+  ip   String @unique
+}
+
+model AddressObject {
+  id          String @id // Use custom IDs like ADDR-001
+  name        String
+  type        AddressObjectType // 'IP/Range' | 'FQDN' | 'Geography'
+  value       String
+  description String
+}
+
+enum AddressObjectType {
+  IPRange @map("IP/Range")
+  FQDN
+  Geography
+}
+
+model ServiceObject {
+  id          String @id // Use custom IDs like SVC-001
+  name        String
+  protocol    ServiceProtocol // 'TCP' | 'UDP' | 'ICMP'
+  portRange   String
+  description String
+}
+
+enum ServiceProtocol {
+  TCP
+  UDP
+  ICMP
+}
+
+model ObjectGroup {
+  id          String @id // Use custom IDs like GRP-001
+  name        String
+  type        ObjectGroupType // 'Address' | 'Service'
+  members     String[] // Array of IDs
+  description String
+}
+
+enum ObjectGroupType {
+  Address
+  Service
+}
+
+model PolicyTemplate {
+  id          String @id // Use custom IDs like TPL-001
+  name        String
+  description String
+  category    PolicyTemplateCategory // 'Security' | 'Compliance' | 'Operations'
+  policy      Json // Partial Policy as JSON
+}
+
+enum PolicyTemplateCategory {
+  Security
+  Compliance
+  Operations
+}
