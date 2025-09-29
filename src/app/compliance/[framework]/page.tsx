@@ -38,9 +38,9 @@ type ComplianceFrameworkPageProps = {
   };
 };
 
-export default function ComplianceFrameworkPage({ params }: ComplianceFrameworkPageProps) {
+export default async function ComplianceFrameworkPage({ params }: ComplianceFrameworkPageProps) {
   const frameworkName = decodeURIComponent(params.framework);
-  const report = getComplianceReportByFramework(frameworkName);
+  const report = await getComplianceReportByFramework(frameworkName);
 
   if (!report) {
     notFound();
@@ -101,7 +101,7 @@ export default function ComplianceFrameworkPage({ params }: ComplianceFrameworkP
 }
 
 export async function generateStaticParams() {
-    const reports = getComplianceReports();
+    const reports = await getComplianceReports();
     return reports.map(report => ({
         framework: report.framework.toLowerCase(),
     }));

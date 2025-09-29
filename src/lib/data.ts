@@ -119,72 +119,7 @@ export function getDevicesSync(): Device[] {
 }
 
 
-const complianceControlData = {
-    'PCI DSS': [
-      { id: 'REQ-3.1', description: 'Data retention and disposal policies', status: 'Compliant' },
-      { id: 'REQ-3.2', description: 'Do not store sensitive authentication data', status: 'Compliant' },
-      { id: 'REQ-8.2', description: 'Strong cryptography and security protocols', status: 'Compliant' },
-    ],
-    'HIPAA': [
-      { id: '164.312(a)(1)', description: 'Access Control', status: 'Compliant' },
-      { id: '164.312(b)', description: 'Audit Controls', status: 'Compliant' },
-      { id: '164.312(c)(1)', description: 'Integrity', status: 'Compliant' },
-    ],
-    'GDPR': [
-      { id: 'Art. 5', description: 'Principles relating to processing of personal data', status: 'Compliant' },
-      { id: 'Art. 25', description: 'Data protection by design and by default', status: 'Needs Review' },
-      { id: 'Art. 32', description: 'Security of processing', status: 'Compliant' },
-    ],
-    'ISO 27001': [
-      { id: 'A.5.1', description: 'Policies for information security', status: 'Compliant' },
-      { id: 'A.8.1', description: 'Asset management', status: 'Non-Compliant' },
-      { id: 'A.12.1', description: 'Operational procedures and responsibilities', status: 'Non-Compliant' },
-      { id: 'A.14.1', description: 'Secure development policy', status: 'Compliant' },
-    ],
-  };
-
-const complianceReports = [
-  {
-    framework: 'PCI DSS',
-    status: 'Compliant',
-    lastAudit: '2024-05-20',
-    coverage: 98,
-    controls: complianceControlData['PCI DSS'],
-  },
-  {
-    framework: 'HIPAA',
-    status: 'Compliant',
-    lastAudit: '2024-04-15',
-    coverage: 100,
-    controls: complianceControlData['HIPAA'],
-  },
-  {
-    framework: 'GDPR',
-    status: 'Needs Review',
-    lastAudit: '2024-06-01',
-    coverage: 85,
-    controls: complianceControlData['GDPR'],
-  },
-  {
-    framework: 'ISO 27001',
-    status: 'Non-Compliant',
-    lastAudit: '2024-03-10',
-    coverage: 60,
-    controls: complianceControlData['ISO 27001'],
-  },
-];
-
-const recentActivities = [
-  { user: 'Alice', action: 'Created policy #4021', time: '5m ago' },
-  { user: 'Bob', action: 'Updated device FW-Primary-DC1', time: '12m ago' },
-  {
-    user: 'System',
-    action: 'Auto-healed misconfiguration on FW-Branch-Office-A',
-    time: '1h ago',
-  },
-  { user: 'Charlie', action: 'Approved policy #4020', time: '3h ago' },
-  { user: 'Alice', action: 'Generated policy from template', time: '5h ago' },
-];
+// All mocked data has been migrated to PostgreSQL database
 
 export async function getPolicies() {
     const policies = await prisma.policy.findMany();
@@ -207,16 +142,74 @@ export async function getSnapshots() {
     }));
 }
 
-export function getComplianceReports() {
-    return complianceReports;
+export async function getComplianceReports() {
+    const frameworks = await prisma.complianceFramework.findMany({
+        include: {
+            controls: true
+        }
+    });
+    
+    return frameworks.map(framework => ({
+        framework: framework.name,
+        status: framework.status === 'NeedsReview' ? 'Needs Review' : 
+                framework.status === 'NonCompliant' ? 'Non-Compliant' : 'Compliant',
+        lastAudit: framework.lastAudit.toISOString().split('T')[0],
+        coverage: framework.coverage,
+        controls: framework.controls.map(control => ({
+            id: control.controlId,
+            description: control.description,
+            status: control.status === 'NeedsReview' ? 'Needs Review' : 
+                   control.status === 'NonCompliant' ? 'Non-Compliant' : 'Compliant'
+        }))
+    }));
 }
 
-export function getComplianceReportByFramework(framework: string) {
-    return complianceReports.find(report => report.framework.toLowerCase() === framework.toLowerCase());
+export async function getComplianceReportByFramework(framework: string) {
+    const reports = await getComplianceReports();
+    return reports.find(report => report.framework.toLowerCase() === framework.toLowerCase());
 }
 
-export function getRecentActivities() {
-    return recentActivities;
+export async function getRecentActivities() {
+    const activities = await prisma.activityLog.findMany({
+        orderBy: {
+            timestamp: 'desc'
+        },
+        take: 10
+    });
+    
+    return activities.map(activity => ({
+        user: activity.user,
+        action: activity.action,
+        time: formatTimeAgo(activity.timestamp)
+    }));
+}
+
+// Helper function to format time ago
+function formatTimeAgo(date: Date): string {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffMins < 60) {
+        return `${diffMins}m ago`;
+    } else if (diffHours < 24) {
+        return `${diffHours}h ago`;
+    } else {
+        return `${diffDays}d ago`;
+    }
+}
+
+// Helper function to log user activities
+export async function logActivity(user: string, action: string) {
+    await prisma.activityLog.create({
+        data: {
+            user,
+            action,
+            timestamp: new Date()
+        }
+    });
 }
 
 export async function getDevices() {
@@ -243,7 +236,7 @@ export async function getObjectGroups() {
     }));
 }
 
-export async function addPolicy(policy: Omit<Policy, 'id'>) {
+export async function addPolicy(policy: Omit<Policy, 'id'>, user: string = 'System') {
     const count = await prisma.policy.count();
     const newId = `POL-${String(count + 1).padStart(3, '0')}`;
     await prisma.policy.create({ 
@@ -254,10 +247,14 @@ export async function addPolicy(policy: Omit<Policy, 'id'>) {
             action: policy.action as any
         } 
     });
+    
+    // Log the activity
+    await logActivity(user, `Created policy ${newId}: ${policy.name}`);
+    
     return await getPolicies();
 }
 
-export async function updatePolicy(updatedPolicy: Partial<Policy> & { id: string }) {
+export async function updatePolicy(updatedPolicy: Partial<Policy> & { id: string }, user: string = 'System') {
     const { id, ...updateData } = updatedPolicy;
     const prismaData: any = { ...updateData };
     
@@ -272,11 +269,19 @@ export async function updatePolicy(updatedPolicy: Partial<Policy> & { id: string
         where: { id },
         data: prismaData,
     });
+    
+    // Log the activity
+    await logActivity(user, `Updated policy ${id}`);
+    
     return await getPolicies();
 }
 
-export async function deletePolicy(policyId: string) {
+export async function deletePolicy(policyId: string, user: string = 'System') {
     await prisma.policy.delete({ where: { id: policyId } });
+    
+    // Log the activity
+    await logActivity(user, `Deleted policy ${policyId}`);
+    
     return await getPolicies();
 }
 

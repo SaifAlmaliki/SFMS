@@ -6,7 +6,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { getRecentActivities } from '@/lib/data';
 
 function getInitials(name: string) {
   if (name === 'System') return 'S';
@@ -14,8 +13,30 @@ function getInitials(name: string) {
   return names.map((n) => n[0]).join('');
 }
 
-export function RecentActivity() {
-    const activities = getRecentActivities();
+interface RecentActivityProps {
+  activities: Array<{
+    user: string;
+    action: string;
+    time: string;
+  }>;
+}
+
+export function RecentActivity({ activities }: RecentActivityProps) {
+  // Handle case where activities might be undefined or empty
+  if (!activities || activities.length === 0) {
+    return (
+      <Card className="lg:col-span-2 xl:col-span-2">
+        <CardHeader>
+          <CardTitle>Recent Activity</CardTitle>
+          <CardDescription>A log of recent platform events.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground text-center py-4">No recent activities found.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="lg:col-span-2 xl:col-span-2">
       <CardHeader>

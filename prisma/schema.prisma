@@ -111,3 +111,51 @@ enum PolicyTemplateCategory {
   Compliance
   Operations
 }
+
+model ComplianceFramework {
+  id          String @id @default(cuid())
+  name        String @unique // e.g., "PCI DSS", "HIPAA", "GDPR", "ISO 27001"
+  status      ComplianceStatus
+  lastAudit   DateTime
+  coverage    Int // Percentage 0-100
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relationship to controls
+  controls    ComplianceControl[]
+}
+
+enum ComplianceStatus {
+  Compliant
+  NeedsReview @map("Needs Review")
+  NonCompliant @map("Non-Compliant")
+}
+
+model ComplianceControl {
+  id            String @id @default(cuid())
+  controlId     String // e.g., "REQ-3.1", "164.312(a)(1)", "Art. 5"
+  description   String
+  status        ComplianceControlStatus
+  frameworkId   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relationship to framework
+  framework     ComplianceFramework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  
+  @@unique([controlId, frameworkId])
+}
+
+enum ComplianceControlStatus {
+  Compliant
+  NeedsReview @map("Needs Review")
+  NonCompliant @map("Non-Compliant")
+}
+
+model ActivityLog {
+  id        String @id @default(cuid())
+  user      String
+  action    String
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now())
+}

@@ -4,6 +4,9 @@ const prisma = new PrismaClient();
 
 async function main() {
   // Clear existing data
+  await prisma.complianceControl.deleteMany();
+  await prisma.complianceFramework.deleteMany();
+  await prisma.activityLog.deleteMany();
   await prisma.policyTemplate.deleteMany();
   await prisma.objectGroup.deleteMany();
   await prisma.serviceObject.deleteMany();
@@ -138,6 +141,80 @@ async function main() {
         category: 'Operations', 
         policy: { source: 'Admin-Network', destination: 'Internal-Network', action: 'Allow' } 
       },
+    ]
+  });
+
+  // Seed Compliance Frameworks
+  const pciFramework = await prisma.complianceFramework.create({
+    data: {
+      name: 'PCI DSS',
+      status: 'Compliant',
+      lastAudit: new Date('2024-05-20'),
+      coverage: 98,
+    }
+  });
+
+  const hipaaFramework = await prisma.complianceFramework.create({
+    data: {
+      name: 'HIPAA',
+      status: 'Compliant',
+      lastAudit: new Date('2024-04-15'),
+      coverage: 100,
+    }
+  });
+
+  const gdprFramework = await prisma.complianceFramework.create({
+    data: {
+      name: 'GDPR',
+      status: 'NeedsReview',
+      lastAudit: new Date('2024-06-01'),
+      coverage: 85,
+    }
+  });
+
+  const isoFramework = await prisma.complianceFramework.create({
+    data: {
+      name: 'ISO 27001',
+      status: 'NonCompliant',
+      lastAudit: new Date('2024-03-10'),
+      coverage: 60,
+    }
+  });
+
+  // Seed Compliance Controls
+  await prisma.complianceControl.createMany({
+    data: [
+      // PCI DSS Controls
+      { controlId: 'REQ-3.1', description: 'Data retention and disposal policies', status: 'Compliant', frameworkId: pciFramework.id },
+      { controlId: 'REQ-3.2', description: 'Do not store sensitive authentication data', status: 'Compliant', frameworkId: pciFramework.id },
+      { controlId: 'REQ-8.2', description: 'Strong cryptography and security protocols', status: 'Compliant', frameworkId: pciFramework.id },
+      
+      // HIPAA Controls
+      { controlId: '164.312(a)(1)', description: 'Access Control', status: 'Compliant', frameworkId: hipaaFramework.id },
+      { controlId: '164.312(b)', description: 'Audit Controls', status: 'Compliant', frameworkId: hipaaFramework.id },
+      { controlId: '164.312(c)(1)', description: 'Integrity', status: 'Compliant', frameworkId: hipaaFramework.id },
+      
+      // GDPR Controls
+      { controlId: 'Art. 5', description: 'Principles relating to processing of personal data', status: 'Compliant', frameworkId: gdprFramework.id },
+      { controlId: 'Art. 25', description: 'Data protection by design and by default', status: 'NeedsReview', frameworkId: gdprFramework.id },
+      { controlId: 'Art. 32', description: 'Security of processing', status: 'Compliant', frameworkId: gdprFramework.id },
+      
+      // ISO 27001 Controls
+      { controlId: 'A.5.1', description: 'Policies for information security', status: 'Compliant', frameworkId: isoFramework.id },
+      { controlId: 'A.8.1', description: 'Asset management', status: 'NonCompliant', frameworkId: isoFramework.id },
+      { controlId: 'A.12.1', description: 'Operational procedures and responsibilities', status: 'NonCompliant', frameworkId: isoFramework.id },
+      { controlId: 'A.14.1', description: 'Secure development policy', status: 'Compliant', frameworkId: isoFramework.id },
+    ]
+  });
+
+  // Seed Activity Logs
+  await prisma.activityLog.createMany({
+    data: [
+      { user: 'Alice', action: 'Created policy #4021', timestamp: new Date(Date.now() - 5 * 60 * 1000) }, // 5 minutes ago
+      { user: 'Bob', action: 'Updated device FW-Primary-DC1', timestamp: new Date(Date.now() - 12 * 60 * 1000) }, // 12 minutes ago
+      { user: 'System', action: 'Auto-healed misconfiguration on FW-Branch-Office-A', timestamp: new Date(Date.now() - 60 * 60 * 1000) }, // 1 hour ago
+      { user: 'Charlie', action: 'Approved policy #4020', timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000) }, // 3 hours ago
+      { user: 'Alice', action: 'Generated policy from template', timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000) }, // 5 hours ago
     ]
   });
 

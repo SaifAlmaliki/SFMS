@@ -25,8 +25,8 @@ const statusStyles = {
   'Non-Compliant': 'bg-destructive text-destructive-foreground',
 };
 
-export default function CompliancePage() {
-  const complianceReports = getComplianceReports();
+export default async function CompliancePage() {
+  const complianceReports = await getComplianceReports();
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Compliance Management</h1>

@@ -10,8 +10,10 @@ import { DeviceHealth } from '@/components/dashboard/device-health';
 import { SecurityPosture } from '@/components/dashboard/security-posture';
 import { RecentActivity } from '@/components/dashboard/recent-activity';
 import { Chatbot } from '@/components/dashboard/chatbot';
+import { getRecentActivities } from '@/lib/data';
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const recentActivities = await getRecentActivities();
   return (
     <div className="grid gap-4 md:gap-8 lg:grid-cols-3 xl:grid-cols-4">
       <Card className="lg:col-span-2 xl:col-span-3">
@@ -57,7 +59,7 @@ export default function DashboardPage() {
 
       <DeviceHealth />
 
-      <RecentActivity />
+      <RecentActivity activities={recentActivities} />
     </div>
   );
 }
