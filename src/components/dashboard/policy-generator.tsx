@@ -10,9 +10,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Bot, Sparkles } from 'lucide-react';
 
 const initialState = {
-  data: '',
-  error: null,
-};
+  error: { description: [] as string[] },
+  data: undefined,
+} as const;
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -32,12 +32,21 @@ export function PolicyGenerator() {
 
   useEffect(() => {
     if (state?.error) {
-      const errorMsg = state.error._server || state.error.description;
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: Array.isArray(errorMsg) ? errorMsg.join(', ') : 'An unknown error occurred.',
-      });
+      let errorMsg: string[] = [];
+      
+      if ('_server' in state.error && state.error._server) {
+        errorMsg = state.error._server;
+      } else if ('description' in state.error && state.error.description) {
+        errorMsg = state.error.description;
+      }
+      
+      if (errorMsg.length > 0) {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: errorMsg.join(', '),
+        });
+      }
     }
     if (state?.data) {
       setPolicy(state.data);
