@@ -1,7 +1,7 @@
 
 'use client';
 
-import { getSnapshots, Snapshot } from '@/lib/data';
+import { Snapshot } from '@/lib/data';
 import {
   Table,
   TableHeader,
@@ -13,8 +13,11 @@ import {
 import { Badge } from '../ui/badge';
 import { SnapshotActions } from './snapshot-actions';
 
-export function SnapshotList() {
-  const snapshots: Snapshot[] = getSnapshots();
+interface SnapshotListProps {
+  snapshots: Snapshot[];
+}
+
+export function SnapshotList({ snapshots }: SnapshotListProps) {
 
   return (
     <Table>

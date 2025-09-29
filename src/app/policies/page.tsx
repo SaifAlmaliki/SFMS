@@ -27,8 +27,8 @@ const statusStyles: Record<Policy['status'], string> = {
 };
 
 
-export default function PoliciesPage() {
-  const policies = getPolicies();
+export default async function PoliciesPage() {
+  const policies = await getPolicies();
   // In a real app, you would get the current user's role from your auth system.
   // We'll mock it here for demonstration.
   const currentUserRole = 'Administrator'; 

@@ -1,7 +1,6 @@
-
 'use client';
 
-import { getAddressObjects } from '@/lib/data';
+import { AddressObject } from '@/lib/data';
 import {
   Table,
   TableHeader,
@@ -10,18 +9,20 @@ import {
   TableBody,
   TableCell,
 } from '@/components/ui/table';
-import { Button } from '../ui/button';
-import { PlusCircle, Pencil, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Badge } from '../ui/badge';
+import { Pencil, Trash2 } from 'lucide-react';
 
-export function AddressObjectsTable() {
-  const objects = getAddressObjects();
+interface AddressObjectsTableProps {
+  objects: AddressObject[];
+}
+
+export function AddressObjectsTable({ objects }: AddressObjectsTableProps) {
 
   return (
     <div className="space-y-4">
         <div className='flex justify-end'>
             <Button>
-                <PlusCircle className='h-4 w-4 mr-2' />
                 New Address Object
             </Button>
         </div>

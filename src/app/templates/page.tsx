@@ -17,8 +17,8 @@ const categoryStyles: Record<PolicyTemplate['category'], string> = {
     'Operations': 'bg-purple-500/20 text-purple-500 border-purple-500/20',
 };
 
-export default function TemplatesPage() {
-  const templates = getPolicyTemplates();
+export default async function TemplatesPage() {
+  const templates = await getPolicyTemplates();
 
   return (
     <div className="space-y-4">

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { getObjectGroups } from '@/lib/data';
+import { ObjectGroup } from '@/lib/data';
 import {
   Table,
   TableHeader,
@@ -14,8 +14,11 @@ import { Button } from '../ui/button';
 import { PlusCircle, Pencil, Trash2 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 
-export function ObjectGroupsTable() {
-  const objects = getObjectGroups();
+interface ObjectGroupsTableProps {
+  objects: ObjectGroup[];
+}
+
+export function ObjectGroupsTable({ objects }: ObjectGroupsTableProps) {
 
   return (
     <div className="space-y-4">

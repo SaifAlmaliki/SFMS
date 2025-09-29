@@ -13,7 +13,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { getDevices, type Policy } from '@/lib/data';
+import { getDevicesSync, type Policy } from '@/lib/data';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
@@ -43,7 +43,7 @@ export function DeployPolicyDialog({ policy, children, disabled }: { policy: Pol
 
   useEffect(() => {
     if (open) {
-      const devices = getDevices();
+      const devices = getDevicesSync();
       setDeployments(devices.map(d => ({ ...d, status: 'Pending' })));
       setIsDeploying(false);
     }

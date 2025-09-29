@@ -10,9 +10,15 @@ import {
     CardTitle,
   } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getAddressObjects, getServiceObjects, getObjectGroups } from '@/lib/data';
 
 
-export default function NetworkObjectsPage() {
+export default async function NetworkObjectsPage() {
+  const [addressObjects, serviceObjects, objectGroups] = await Promise.all([
+    getAddressObjects(),
+    getServiceObjects(),
+    getObjectGroups()
+  ]);
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Network Objects</h1>
@@ -34,7 +40,7 @@ export default function NetworkObjectsPage() {
                     <CardDescription>Manage IP addresses, FQDNs, and geographical locations.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <AddressObjectsTable />
+                    <AddressObjectsTable objects={addressObjects} />
                 </CardContent>
             </Card>
         </TabsContent>
@@ -46,7 +52,7 @@ export default function NetworkObjectsPage() {
                     <CardDescription>Manage protocols and port numbers for your policies.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <ServiceObjectsTable />
+                    <ServiceObjectsTable objects={serviceObjects} />
                 </CardContent>
             </Card>
         </TabsContent>
@@ -58,7 +64,7 @@ export default function NetworkObjectsPage() {
                     <CardDescription>Manage collections of address and service objects.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <ObjectGroupsTable />
+                    <ObjectGroupsTable objects={objectGroups} />
                 </CardContent>
             </Card>
         </TabsContent>

@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { Policy } from '@/lib/data';
-import { getAddressObjects, getObjectGroups } from '@/lib/data';
+import { getAddressObjectsSync, getObjectGroupsSync } from '@/lib/data';
 
 interface PolicyFormProps {
     policy?: Omit<Policy, 'id'> & { id?: string };
@@ -26,8 +26,8 @@ export function PolicyForm({ policy, errors, submitButtonText }: PolicyFormProps
   const { pending } = useFormStatus();
   const availableStatuses = policy?.id ? ['Active', 'Inactive'] : [];
   
-  const addressObjects = getAddressObjects();
-  const addressGroups = getObjectGroups().filter(g => g.type === 'Address');
+  const addressObjects = getAddressObjectsSync();
+  const addressGroups = getObjectGroupsSync().filter(g => g.type === 'Address');
   const networkObjectOptions = [
     { label: 'Default Zones', options: [
         { value: 'Internal', label: 'Internal' },

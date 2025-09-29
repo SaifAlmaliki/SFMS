@@ -84,6 +84,40 @@ export type PolicyTemplate = {
 
 // All data now comes from the database via Prisma
 
+// Temporary sync versions for client components (will be replaced with proper data fetching)
+let cachedAddressObjects: AddressObject[] = [
+    { id: 'ADDR-001', name: 'Internal-Network', type: 'IP/Range', value: '10.0.0.0/8', description: 'Main internal corporate network.' },
+    { id: 'ADDR-002', name: 'Web-Server-VIP', type: 'IP/Range', value: '192.0.2.10', description: 'Public VIP for web servers.' },
+    { id: 'ADDR-003', name: 'google.com', type: 'FQDN', value: 'google.com', description: 'Google main domain.' },
+    { id: 'ADDR-004', name: 'United-States-Geo', type: 'Geography', value: 'US', description: 'IP addresses geolocated to the USA.' },
+];
+
+let cachedObjectGroups: ObjectGroup[] = [
+    { id: 'GRP-001', name: 'Web-Services', type: 'Service', members: ['SVC-001', 'SVC-002'], description: 'Group for all standard web protocols.' },
+    { id: 'GRP-002', name: 'Allowed-Public-Sites', type: 'Address', members: ['ADDR-003'], description: 'Group of FQDNs for allowed public websites.' },
+];
+
+let cachedDevices: Device[] = [
+    { name: 'FW-Primary-DC1', ip: '10.1.1.1' },
+    { name: 'FW-Secondary-DC1', ip: '10.1.1.2' },
+    { name: 'FW-Branch-Office-A', ip: '192.168.1.1' },
+    { name: 'FW-Cloud-VPC', ip: '172.16.0.1' },
+    { name: 'FW-DMZ', ip: '10.100.1.5' },
+];
+
+// Sync versions for client components (these will return cached data)
+export function getAddressObjectsSync(): AddressObject[] {
+    return cachedAddressObjects;
+}
+
+export function getObjectGroupsSync(): ObjectGroup[] {
+    return cachedObjectGroups;
+}
+
+export function getDevicesSync(): Device[] {
+    return cachedDevices;
+}
+
 
 const complianceControlData = {
     'PCI DSS': [
@@ -166,7 +200,11 @@ export async function getPolicyTemplates() {
 }
 
 export async function getSnapshots() {
-    return await prisma.snapshot.findMany();
+    const snapshots = await prisma.snapshot.findMany();
+    return snapshots.map(s => ({
+        ...s,
+        date: s.date.toISOString().split('T')[0] // Convert Date to string (YYYY-MM-DD)
+    }));
 }
 
 export function getComplianceReports() {
@@ -186,7 +224,11 @@ export async function getDevices() {
 }
 
 export async function getAddressObjects() {
-    return await prisma.addressObject.findMany();
+    const objects = await prisma.addressObject.findMany();
+    return objects.map(obj => ({
+        ...obj,
+        type: (obj.type === 'IPRange' ? 'IP/Range' : obj.type) as 'IP/Range' | 'FQDN' | 'Geography'
+    }));
 }
 
 export async function getServiceObjects() {
@@ -194,7 +236,11 @@ export async function getServiceObjects() {
 }
 
 export async function getObjectGroups() {
-    return await prisma.objectGroup.findMany();
+    const groups = await prisma.objectGroup.findMany();
+    return groups.map(group => ({
+        ...group,
+        type: group.type as 'Address' | 'Service'
+    }));
 }
 
 export async function addPolicy(policy: Omit<Policy, 'id'>) {

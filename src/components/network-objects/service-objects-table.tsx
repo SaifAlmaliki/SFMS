@@ -1,7 +1,7 @@
 
 'use client';
 
-import { getServiceObjects } from '@/lib/data';
+import { ServiceObject } from '@/lib/data';
 import {
   Table,
   TableHeader,
@@ -13,8 +13,11 @@ import {
 import { Button } from '../ui/button';
 import { PlusCircle, Pencil, Trash2 } from 'lucide-react';
 
-export function ServiceObjectsTable() {
-  const objects = getServiceObjects();
+interface ServiceObjectsTableProps {
+  objects: ServiceObject[];
+}
+
+export function ServiceObjectsTable({ objects }: ServiceObjectsTableProps) {
 
   return (
     <div className="space-y-4">

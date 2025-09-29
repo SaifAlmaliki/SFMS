@@ -1,4 +1,3 @@
-
 import { SnapshotList } from '@/components/configuration/snapshot-list';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,8 +9,11 @@ import {
   } from '@/components/ui/card';
 import { Save } from 'lucide-react';
 import { ScheduleSnapshotDialog } from '@/components/configuration/schedule-snapshot-dialog';
+import { getSnapshots } from '@/lib/data';
   
-  export default function ConfigurationPage() {
+  export default async function ConfigurationPage() {
+    const snapshots = await getSnapshots();
+
     return (
       <div className="space-y-4">
          <div className="flex justify-between items-start">
@@ -35,10 +37,9 @@ import { ScheduleSnapshotDialog } from '@/components/configuration/schedule-snap
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <SnapshotList />
+                <SnapshotList snapshots={snapshots} />
             </CardContent>
         </Card>
       </div>
     );
   }
-  
