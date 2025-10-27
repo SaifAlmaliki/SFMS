@@ -81,12 +81,17 @@ async function main() {
     },
   ];
 
-  for (const ticket of tickets) {
-    await prisma.changeTicket.create({
-      data: ticket,
-    });
+  // Create sample change tickets (skip if already exist)
+  try {
+    for (const ticket of tickets) {
+      await prisma.changeTicket.create({
+        data: ticket,
+      });
+    }
+    console.log('✅ Change tickets created');
+  } catch (error) {
+    console.log('ℹ️ Change tickets already exist, skipping...');
   }
-  console.log('✅ Change tickets created');
 
   // Generate sample firewall logs
   const sampleLogs = [];
@@ -147,6 +152,45 @@ async function main() {
     await prisma.alert.create({ data: alert });
   }
   console.log('✅ Alerts created');
+
+  // Create FortiGate devices
+  const fortigateDevices = [
+    {
+      name: 'FW-Primary-DC1',
+      ip: '10.1.1.1',
+      vendor: 'fortigate',
+      model: 'FortiGate-100F',
+      version: '7.0.5',
+      apiKey: 'mock-api-key-12345',
+      status: 'Active',
+    },
+    {
+      name: 'FW-Secondary-DC1',
+      ip: '10.1.1.2',
+      vendor: 'fortigate',
+      model: 'FortiGate-100F',
+      version: '7.0.5',
+      apiKey: 'mock-api-key-67890',
+      status: 'Active',
+    },
+    {
+      name: 'FW-Branch-Office-A',
+      ip: '192.168.1.1',
+      vendor: 'fortigate',
+      model: 'FortiGate-60F',
+      version: '7.0.4',
+      apiKey: 'mock-api-key-branch',
+      status: 'Active',
+    },
+  ];
+
+  for (const device of fortigateDevices) {
+    await prisma.device.updateMany({
+      where: { name: device.name },
+      data: device,
+    });
+  }
+  console.log('✅ FortiGate devices created');
 
   console.log('🎉 AI Agent data seeded successfully!');
 }

@@ -1,10 +1,11 @@
 /**
- * @fileOverview Enhanced AI chatbot for firewall management with conversation history and ticket creation
+ * @fileOverview Enhanced AI chatbot for firewall management with FortiGate-specific support
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { PrismaClient } from '../../generated/prisma';
+import { FORTIGATE_VENDOR, convertToVendorFormat, validatePolicy } from '@/lib/firewall-vendors';
 
 const prisma = new PrismaClient();
 
@@ -12,6 +13,7 @@ const FirewallChatAgentInputSchema = z.object({
   query: z.string().describe('The user\'s natural language query or request'),
   userId: z.string().describe('The ID of the user making the request'),
   conversationId: z.string().optional().describe('Optional conversation ID for context'),
+  vendor: z.string().optional().describe('Firewall vendor (fortigate, paloalto, cisco)'),
 });
 
 export type FirewallChatAgentInput = z.infer<typeof FirewallChatAgentInputSchema>;
@@ -22,6 +24,8 @@ const FirewallChatAgentOutputSchema = z.object({
   ticketCreated: z.boolean().optional().describe('Whether a change ticket was created'),
   ticketId: z.string().optional().describe('The ID of the created ticket, if applicable'),
   policyGenerated: z.boolean().optional().describe('Whether a policy was generated'),
+  vendor: z.string().optional().describe('The firewall vendor used'),
+  cliConfig: z.string().optional().describe('Vendor-specific CLI configuration'),
 });
 
 export type FirewallChatAgentOutput = z.infer<typeof FirewallChatAgentOutputSchema>;
@@ -76,7 +80,7 @@ function parsePolicyRequest(query: string): {
 }
 
 export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<FirewallChatAgentOutput> {
-  const { query, userId, conversationId } = input;
+  const { query, userId, conversationId, vendor = 'fortigate' } = input;
   
   // Get or create conversation
   let convId = conversationId;
@@ -119,20 +123,21 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
   let ticketId: string | undefined;
   let ticketCreated = false;
   let policyGenerated = false;
+  let cliConfig: string | undefined;
 
-  // Build context for AI
-  let systemContext = `You are an expert firewall administrator assistant helping users manage firewall policies.
+  // Build context for AI with vendor-specific information
+  let systemContext = `You are an expert firewall administrator assistant helping users manage ${vendor.toUpperCase()} firewall policies.
 You can help create policies, answer questions about firewall configurations, and provide security recommendations.
 Be concise and helpful.`;
   
   if (shouldCreatePolicy && policyDetails) {
-    systemContext += `\n\nThe user wants to create a firewall policy:
+    systemContext += `\n\nThe user wants to create a ${vendor.toUpperCase()} firewall policy:
 - Action: ${policyDetails.action}
 - Source: ${policyDetails.source}
 - Destination: ${policyDetails.destination}
 - Policy Name: ${policyDetails.name}
 
-Generate this policy and explain what it does. Then create a change ticket for admin approval.`;
+Generate this policy in ${vendor.toUpperCase()} format and explain what it does. Then create a change ticket for admin approval.`;
   }
 
   // Build conversation context
@@ -169,6 +174,18 @@ Provide a helpful response.`,
   // If this is a policy request, create a ticket and draft policy
   if (shouldCreatePolicy && policyDetails) {
     try {
+      // Convert to vendor-specific format
+      const vendorPolicy = convertToVendorFormat(policyDetails, FORTIGATE_VENDOR);
+      
+      // Validate the policy
+      const validation = validatePolicy(vendorPolicy, FORTIGATE_VENDOR);
+      if (!validation.valid) {
+        console.error('Policy validation failed:', validation.errors);
+      }
+      
+      // Generate CLI configuration for FortiGate
+      cliConfig = generateFortiGateCLI(vendorPolicy);
+      
       // Create draft policy
       const policyCount = await prisma.policy.count();
       const policyId = `POL-${String(policyCount + 1).padStart(3, '0')}`;
@@ -181,6 +198,9 @@ Provide a helpful response.`,
           destination: policyDetails.destination,
           action: policyDetails.action,
           status: 'PendingApproval',
+          vendor: vendor,
+          rawConfig: vendorPolicy,
+          cliConfig: cliConfig,
         },
       });
 
@@ -193,8 +213,8 @@ Provide a helpful response.`,
           ticketNumber,
           policyId: policy.id,
           requestedBy: userId,
-          title: `Create Policy: ${policyDetails.name}`,
-          description: `Policy requested via AI chat: ${query}`,
+          title: `Create ${vendor.toUpperCase()} Policy: ${policyDetails.name}`,
+          description: `${vendor.toUpperCase()} policy requested via AI chat: ${query}`,
           status: 'PendingApproval',
           priority: 'Medium',
         },
@@ -214,6 +234,28 @@ Provide a helpful response.`,
     ticketCreated,
     ticketId,
     policyGenerated,
+    vendor,
+    cliConfig,
   };
+}
+
+/**
+ * Generate FortiGate CLI configuration from policy
+ */
+function generateFortiGateCLI(policy: any): string {
+  return `config firewall policy
+  edit 0
+    set name "${policy.name}"
+    set srcintf "${policy.srcintf}"
+    set dstintf "${policy.dstintf}"
+    set srcaddr "${policy.srcaddr}"
+    set dstaddr "${policy.dstaddr}"
+    set action ${policy.action}
+    set schedule "${policy.schedule}"
+    set service "${policy.service}"
+    set logtraffic ${policy.logtraffic}
+    ${policy.comments ? `set comments "${policy.comments}"` : ''}
+  next
+end`;
 }
 

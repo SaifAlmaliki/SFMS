@@ -24,6 +24,12 @@ model Policy {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   
+  // Vendor-specific fields
+  vendor     String?     // 'fortigate', 'paloalto', 'cisco', etc.
+  vendorId   String?     // Vendor-specific policy ID
+  rawConfig  Json?       // Store vendor-specific configuration
+  cliConfig  String?     @db.Text // Store CLI configuration
+  
   // Relationships
   ticket     ChangeTicket?
   deployments PolicyDeployment[]
@@ -56,9 +62,24 @@ enum SnapshotStatus {
 }
 
 model Device {
-  id   String @id @default(cuid())
-  name String @unique
-  ip   String @unique
+  id          String   @id @default(cuid())
+  name        String   @unique
+  ip          String   @unique
+  vendor      String?  // 'fortigate', 'paloalto', 'cisco'
+  model       String?  // Device model
+  version     String?  // Firmware version
+  apiKey      String?  // API key for authentication
+  status      DeviceStatus @default(Active)
+  lastSync    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+}
+
+enum DeviceStatus {
+  Active
+  Inactive
+  Maintenance
+  Error
 }
 
 model AddressObject {

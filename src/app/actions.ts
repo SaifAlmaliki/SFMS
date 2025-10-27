@@ -169,6 +169,7 @@ const chatSchema = z.object({
   query: z.string().min(1, 'Message cannot be empty.'),
   userId: z.string().optional(),
   conversationId: z.string().optional(),
+  vendor: z.string().optional(),
 });
 
 export async function chatAction(_prevState: any, formData: FormData) {
@@ -176,6 +177,7 @@ export async function chatAction(_prevState: any, formData: FormData) {
         query: formData.get('query'),
         userId: formData.get('userId') as string || 'user-001',
         conversationId: formData.get('conversationId') as string,
+        vendor: formData.get('vendor') as string || 'fortigate',
     });
 
     if (!validatedFields.success) {
@@ -192,6 +194,7 @@ export async function chatAction(_prevState: any, formData: FormData) {
             query: validatedFields.data.query,
             userId: validatedFields.data.userId || 'user-001',
             conversationId: validatedFields.data.conversationId,
+            vendor: validatedFields.data.vendor || 'fortigate',
         });
         
         return {
@@ -199,6 +202,8 @@ export async function chatAction(_prevState: any, formData: FormData) {
             conversationId: result.conversationId,
             ticketCreated: result.ticketCreated || false,
             ticketId: result.ticketId,
+            vendor: result.vendor,
+            cliConfig: result.cliConfig,
         };
     } catch (e) {
         console.error('Chat action error:', e);

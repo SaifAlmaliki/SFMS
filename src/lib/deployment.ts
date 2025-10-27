@@ -1,8 +1,10 @@
 /**
- * Deployment utilities for firewall policy deployment
+ * Deployment utilities for firewall policy deployment with FortiGate support
  */
 
 import { PrismaClient } from '../generated/prisma';
+import { MockFortiGateApiClient, FortiGateDevice } from './fortigate-api';
+import { FORTIGATE_VENDOR } from './firewall-vendors';
 
 const prisma = new PrismaClient();
 
@@ -15,24 +17,74 @@ export interface DeploymentRequest {
 }
 
 /**
- * Mock FortiGate API - Replace this with real API integration when ready
+ * Deploy policy to FortiGate device using REST API
  */
-async function deployToFortiGate(device: string, policy: any): Promise<{ success: boolean; message?: string }> {
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-  
-  // Simulate occasional failures (5% failure rate)
-  if (Math.random() < 0.05) {
+async function deployToFortiGate(deviceName: string, policy: any): Promise<{ success: boolean; message?: string; vendorId?: string }> {
+  try {
+    // Get device information from database
+    const device = await prisma.device.findFirst({
+      where: { 
+        name: deviceName,
+        vendor: 'fortigate',
+        status: 'Active'
+      }
+    });
+
+    if (!device) {
+      return {
+        success: false,
+        message: `FortiGate device '${deviceName}' not found or inactive`,
+      };
+    }
+
+    if (!device.apiKey) {
+      return {
+        success: false,
+        message: `API key not configured for device '${deviceName}'`,
+      };
+    }
+
+    // Create FortiGate API client
+    const fortigateDevice: FortiGateDevice = {
+      id: device.id,
+      name: device.name,
+      ip: device.ip,
+      apiKey: device.apiKey,
+      version: device.version || undefined,
+    };
+
+    const apiClient = new MockFortiGateApiClient(fortigateDevice); // Use MockFortiGateApiClient for now
+
+    // Test connection first
+    const connectionTest = await apiClient.testConnection();
+    if (!connectionTest.success) {
+      return {
+        success: false,
+        message: `Connection failed: ${connectionTest.error}`,
+      };
+    }
+
+    // Deploy the policy
+    const deployResult = await apiClient.createPolicy(policy.rawConfig || policy);
+    
+    if (deployResult.success) {
+      return {
+        success: true,
+        message: 'Policy deployed successfully to FortiGate',
+        vendorId: deployResult.data?.id || 'unknown',
+      };
+    } else {
+      return {
+        success: false,
+        message: `Deployment failed: ${deployResult.error}`,
+      };
+    }
+  } catch (error: any) {
     return {
       success: false,
-      message: 'Connection timeout to firewall device',
+      message: `Deployment error: ${error.message}`,
     };
   }
-  
-  return {
-    success: true,
-    message: 'Policy deployed successfully',
-  };
 }
 
 /**
@@ -73,6 +125,15 @@ export async function deployPolicy(request: DeploymentRequest): Promise<string> 
         },
       });
 
+      // Update policy with vendor ID
+      await prisma.policy.update({
+        where: { id: request.policyId },
+        data: { 
+          status: 'Active',
+          vendorId: result.vendorId,
+        },
+      });
+
       // Update ticket status if exists
       if (request.ticketId) {
         await prisma.changeTicket.update({
@@ -83,12 +144,6 @@ export async function deployPolicy(request: DeploymentRequest): Promise<string> 
           },
         });
       }
-
-      // Update policy status
-      await prisma.policy.update({
-        where: { id: request.policyId },
-        data: { status: 'Active' },
-      });
 
       return deployment.id;
     } else {
