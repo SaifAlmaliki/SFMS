@@ -167,11 +167,15 @@ export async function rejectPolicyAction(prevState: any, formData: FormData) {
 
 const chatSchema = z.object({
   query: z.string().min(1, 'Message cannot be empty.'),
+  userId: z.string().optional(),
+  conversationId: z.string().optional(),
 });
 
 export async function chatAction(_prevState: any, formData: FormData) {
     const validatedFields = chatSchema.safeParse({
         query: formData.get('query'),
+        userId: formData.get('userId') as string || 'user-001',
+        conversationId: formData.get('conversationId') as string,
     });
 
     if (!validatedFields.success) {
@@ -181,11 +185,23 @@ export async function chatAction(_prevState: any, formData: FormData) {
     }
 
     try {
-        const result = await nlpChatbotAssistance({ query: validatedFields.data.query });
+        // Import the enhanced chat agent
+        const { firewallChatAgent } = await import('@/ai/flows/firewall-chat-agent');
+        
+        const result = await firewallChatAgent({
+            query: validatedFields.data.query,
+            userId: validatedFields.data.userId || 'user-001',
+            conversationId: validatedFields.data.conversationId,
+        });
+        
         return {
             response: result.response,
+            conversationId: result.conversationId,
+            ticketCreated: result.ticketCreated || false,
+            ticketId: result.ticketId,
         };
     } catch (e) {
+        console.error('Chat action error:', e);
         return {
             error: 'Failed to get response from assistant. Please try again.',
         };
@@ -414,4 +430,86 @@ export async function createIncidentAction(_prevState: any, formData: FormData) 
     }
 }
 
-    
+// Ticket Management Actions
+export async function approveTicketAction(ticketId: string) {
+  const { inngest } = await import('@/inngest/client');
+  const { PrismaClient } = await import('../generated/prisma');
+  const prisma = new PrismaClient();
+
+  try {
+    const ticket = await prisma.changeTicket.findUnique({
+      where: { id: ticketId },
+      include: { policy: true },
+    });
+
+    if (!ticket) {
+      throw new Error('Ticket not found');
+    }
+
+    if (ticket.status !== 'PendingApproval') {
+      throw new Error('Ticket is not pending approval');
+    }
+
+    // Update ticket status
+    await prisma.changeTicket.update({
+      where: { id: ticketId },
+      data: {
+        status: 'Approved',
+        approvedAt: new Date(),
+      },
+    });
+
+    // If ticket has a policy, trigger deployment
+    if (ticket.policy) {
+      await inngest.send({
+        name: 'firewall/policy.deploy',
+        data: {
+          policyId: ticket.policyId!,
+          ticketId: ticketId,
+          deployedBy: ticket.requestedBy,
+          targetDevice: 'FW-Primary-DC1', // Default device
+        },
+      });
+    }
+
+    return { success: true };
+  } catch (e) {
+    console.error('Failed to approve ticket:', e);
+    throw e;
+  }
+}
+
+export async function rejectTicketAction(ticketId: string) {
+  const { PrismaClient } = await import('../generated/prisma');
+  const prisma = new PrismaClient();
+
+  try {
+    await prisma.changeTicket.update({
+      where: { id: ticketId },
+      data: {
+        status: 'Rejected',
+        updatedAt: new Date(),
+      },
+    });
+
+    // If there's a policy, mark it as inactive
+    const ticket = await prisma.changeTicket.findUnique({
+      where: { id: ticketId },
+      include: { policy: true },
+    });
+
+    if (ticket?.policyId) {
+      await prisma.policy.update({
+        where: { id: ticket.policyId },
+        data: { status: 'Inactive' },
+      });
+    }
+
+    return { success: true };
+  } catch (e) {
+    console.error('Failed to reject ticket:', e);
+    throw e;
+  }
+}
+
+     

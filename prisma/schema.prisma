@@ -23,6 +23,10 @@ model Policy {
   status     PolicyStatus // 'Active' | 'Inactive' | 'Pending Approval'
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  
+  // Relationships
+  ticket     ChangeTicket?
+  deployments PolicyDeployment[]
 }
 
 enum PolicyAction {
@@ -158,4 +162,187 @@ model ActivityLog {
   action    String
   timestamp DateTime @default(now())
   createdAt DateTime @default(now())
+}
+
+// User & Permission Management
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      UserRole
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum UserRole {
+  Viewer
+  Editor
+  Admin
+}
+
+// Chat & Conversation History
+model ChatConversation {
+  id         String        @id @default(cuid())
+  userId     String
+  title      String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  messages   ChatMessage[]
+}
+
+model ChatMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String           @db.Text
+  timestamp      DateTime         @default(now())
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+enum MessageRole {
+  User
+  Assistant
+}
+
+// Change Ticket Management
+model ChangeTicket {
+  id           String           @id @default(cuid())
+  ticketNumber String           @unique
+  policyId     String?          @unique
+  requestedBy  String
+  title        String
+  description  String           @db.Text
+  status       TicketStatus
+  priority     TicketPriority
+  assignedTo   String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  approvedAt   DateTime?
+  deployedAt   DateTime?
+  scheduledFor DateTime?
+  policy       Policy?          @relation(fields: [policyId], references: [id])
+  comments     TicketComment[]
+}
+
+enum TicketStatus {
+  Draft
+  PendingApproval
+  Approved
+  Rejected
+  Scheduled
+  Deployed
+  Failed
+}
+
+enum TicketPriority {
+  Low
+  Medium
+  High
+  Critical
+}
+
+model TicketComment {
+  id        String       @id @default(cuid())
+  ticketId  String
+  author    String
+  content   String       @db.Text
+  createdAt DateTime     @default(now())
+  ticket    ChangeTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+// Log Monitoring & Alerts
+model FirewallLog {
+  id          String      @id @default(cuid())
+  timestamp   DateTime    @default(now())
+  sourceIp    String
+  destIp      String
+  sourcePort  Int?
+  destPort    Int?
+  protocol    String
+  action      LogAction
+  policyId    String?
+  deviceName  String
+  severity    LogSeverity
+  message     String?     @db.Text
+}
+
+enum LogAction {
+  Allow
+  Deny
+  Drop
+}
+
+enum LogSeverity {
+  Info
+  Warning
+  Critical
+}
+
+model Alert {
+  id          String        @id @default(cuid())
+  type        AlertType
+  severity    AlertSeverity
+  title       String
+  description String        @db.Text
+  source      String
+  status      AlertStatus
+  createdAt   DateTime      @default(now())
+  resolvedAt  DateTime?
+  resolvedBy  String?
+}
+
+enum AlertType {
+  AnomalyDetected
+  PolicyViolation
+  ThresholdExceeded
+  ConfigurationDrift
+  FailedDeployment
+}
+
+enum AlertSeverity {
+  Low
+  Medium
+  High
+  Critical
+}
+
+enum AlertStatus {
+  Open
+  Acknowledged
+  Resolved
+  Suppressed
+}
+
+// Deployment & Audit Trail
+model PolicyDeployment {
+  id           String           @id @default(cuid())
+  policyId     String
+  ticketId     String?
+  deployedBy   String
+  deployedAt   DateTime         @default(now())
+  status       DeploymentStatus
+  targetDevice String
+  errorMessage String?          @db.Text
+  rollbackId   String?
+  policy       Policy           @relation(fields: [policyId], references: [id])
+}
+
+enum DeploymentStatus {
+  Pending
+  InProgress
+  Success
+  Failed
+  RolledBack
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  timestamp  DateTime  @default(now())
+  userId     String
+  action     String
+  resource   String
+  resourceId String?
+  details    Json?
+  ipAddress  String?
+  userAgent  String?
 }
