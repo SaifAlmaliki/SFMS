@@ -241,6 +241,14 @@ model ChangeTicket {
   approvedAt   DateTime?
   deployedAt   DateTime?
   scheduledFor DateTime?
+  
+  // External ticket system integration
+  externalSystem  String?        // 'servicenow', 'jira', 'internal'
+  externalId      String?        // External ticket ID (e.g., CHG001234, PROJ-123)
+  externalUrl     String?        // Link to external ticket
+  lastSyncAt      DateTime?      // Last synchronization timestamp
+  syncStatus      SyncStatus     @default(Pending)
+  
   policy       Policy?          @relation(fields: [policyId], references: [id])
   comments     TicketComment[]
 }
@@ -260,6 +268,24 @@ enum TicketPriority {
   Medium
   High
   Critical
+}
+
+enum SyncStatus {
+  Pending
+  Synced
+  Failed
+  Disabled
+}
+
+// External Ticket System Configuration
+model ExternalTicketSystem {
+  id          String   @id @default(cuid())
+  name        String   @unique // 'servicenow', 'jira'
+  displayName String   // 'ServiceNow', 'Jira'
+  isActive    Boolean  @default(false)
+  config      Json     // System-specific configuration
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model TicketComment {

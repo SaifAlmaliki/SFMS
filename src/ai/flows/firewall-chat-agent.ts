@@ -6,6 +6,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { PrismaClient } from '../../generated/prisma';
 import { FORTIGATE_VENDOR, convertToVendorFormat, validatePolicy } from '@/lib/firewall-vendors';
+import { ExternalTicketService } from '@/lib/external-ticket-service';
 
 const prisma = new PrismaClient();
 
@@ -14,6 +15,7 @@ const FirewallChatAgentInputSchema = z.object({
   userId: z.string().describe('The ID of the user making the request'),
   conversationId: z.string().optional().describe('Optional conversation ID for context'),
   vendor: z.string().optional().describe('Firewall vendor (fortigate, paloalto, cisco)'),
+  externalSystem: z.string().optional().describe('External ticket system (servicenow, jira)'),
 });
 
 export type FirewallChatAgentInput = z.infer<typeof FirewallChatAgentInputSchema>;
@@ -26,6 +28,9 @@ const FirewallChatAgentOutputSchema = z.object({
   policyGenerated: z.boolean().optional().describe('Whether a policy was generated'),
   vendor: z.string().optional().describe('The firewall vendor used'),
   cliConfig: z.string().optional().describe('Vendor-specific CLI configuration'),
+  externalTicketCreated: z.boolean().optional().describe('Whether an external ticket was created'),
+  externalTicketId: z.string().optional().describe('The external ticket ID'),
+  externalTicketUrl: z.string().optional().describe('The external ticket URL'),
 });
 
 export type FirewallChatAgentOutput = z.infer<typeof FirewallChatAgentOutputSchema>;
@@ -80,7 +85,7 @@ function parsePolicyRequest(query: string): {
 }
 
 export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<FirewallChatAgentOutput> {
-  const { query, userId, conversationId, vendor = 'fortigate' } = input;
+  const { query, userId, conversationId, vendor = 'fortigate', externalSystem } = input;
   
   // Get or create conversation
   let convId = conversationId;
@@ -124,6 +129,9 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
   let ticketCreated = false;
   let policyGenerated = false;
   let cliConfig: string | undefined;
+  let externalTicketCreated = false;
+  let externalTicketId: string | undefined;
+  let externalTicketUrl: string | undefined;
 
   // Build context for AI with vendor-specific information
   let systemContext = `You are an expert firewall administrator assistant helping users manage ${vendor.toUpperCase()} firewall policies.
@@ -223,6 +231,30 @@ Provide a helpful response.`,
       ticketId = ticket.id;
       ticketCreated = true;
       policyGenerated = true;
+
+      // Create external ticket if external system is specified
+      if (externalSystem && (externalSystem === 'servicenow' || externalSystem === 'jira')) {
+        try {
+          const externalTicketService = new ExternalTicketService();
+          const externalResult = await externalTicketService.createExternalTicket({
+            ticketId: ticket.id,
+            system: externalSystem,
+            title: ticket.title,
+            description: ticket.description,
+            priority: ticket.priority,
+            requestedBy: userId,
+            policyId: policy.id
+          });
+
+          if (externalResult.success) {
+            externalTicketCreated = true;
+            externalTicketId = externalResult.externalId;
+            externalTicketUrl = externalResult.externalUrl;
+          }
+        } catch (error) {
+          console.error('Failed to create external ticket:', error);
+        }
+      }
     } catch (error) {
       console.error('Error creating policy and ticket:', error);
     }
@@ -236,6 +268,9 @@ Provide a helpful response.`,
     policyGenerated,
     vendor,
     cliConfig,
+    externalTicketCreated,
+    externalTicketId,
+    externalTicketUrl,
   };
 }
 

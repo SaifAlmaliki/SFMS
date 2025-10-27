@@ -192,6 +192,43 @@ async function main() {
   }
   console.log('✅ FortiGate devices created');
 
+  // Create external ticket system configurations
+  const externalSystems = [
+    {
+      name: 'servicenow',
+      displayName: 'ServiceNow',
+      isActive: false,
+      config: {
+        instanceUrl: 'https://your-instance.service-now.com',
+        username: 'admin',
+        password: 'password',
+        tableName: 'change_request',
+        apiVersion: 'v1'
+      }
+    },
+    {
+      name: 'jira',
+      displayName: 'Jira',
+      isActive: false,
+      config: {
+        baseUrl: 'https://your-domain.atlassian.net',
+        username: 'user@company.com',
+        apiToken: 'your-api-token',
+        projectKey: 'PROJ',
+        issueType: 'Task'
+      }
+    }
+  ];
+
+  for (const system of externalSystems) {
+    await prisma.externalTicketSystem.upsert({
+      where: { name: system.name },
+      update: system,
+      create: system,
+    });
+  }
+  console.log('✅ External ticket systems created');
+
   console.log('🎉 AI Agent data seeded successfully!');
 }
 
