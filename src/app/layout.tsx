@@ -1,8 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { SidebarProvider } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/toaster';
-import { AppLayout } from '@/components/layout';
 import { cn } from '@/lib/utils';
 import { ThemeProvider } from '@/components/theme-provider';
 
@@ -33,9 +31,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <SidebarProvider>
-            <AppLayout>{children}</AppLayout>
-          </SidebarProvider>
+          {children}
           <Toaster />
         </ThemeProvider>
       </body>
