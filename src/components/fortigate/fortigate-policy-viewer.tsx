@@ -27,7 +27,22 @@ export function FortiGatePolicyViewer({ policy }: FortiGatePolicyViewerProps) {
 
   const copyToClipboard = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      // Check if clipboard API is available
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback for older browsers or non-secure contexts
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
       setCopied(true);
       toast({
         title: "Copied to clipboard",
@@ -35,11 +50,31 @@ export function FortiGatePolicyViewer({ policy }: FortiGatePolicyViewerProps) {
       });
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      toast({
-        title: "Copy failed",
-        description: "Failed to copy to clipboard",
-        variant: "destructive",
-      });
+      // Try fallback method
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setCopied(true);
+        toast({
+          title: "Copied to clipboard",
+          description: "FortiGate CLI configuration copied successfully",
+        });
+        setTimeout(() => setCopied(false), 2000);
+      } catch (fallbackError) {
+        toast({
+          title: "Copy failed",
+          description: "Failed to copy to clipboard",
+          variant: "destructive",
+        });
+      }
     }
   };
 
