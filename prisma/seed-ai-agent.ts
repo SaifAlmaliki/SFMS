@@ -229,6 +229,164 @@ async function main() {
   }
   console.log('✅ External ticket systems created');
 
+  // Create sample policies with history for testing duplicate detection
+  const samplePolicies = [
+    {
+      id: 'POL-001',
+      name: 'Database Access Policy',
+      source: '10.1.1.5',
+      destination: '192.168.1.10',
+      destPort: 443,
+      action: 'Allow',
+      status: 'Active',
+      businessJustification: 'Database access for reporting service',
+      requestedBy: 'john.doe@company.com',
+      approvedBy: 'admin@company.com',
+      targetDevice: 'FW-Primary-DC1',
+      sourceZone: 'internal',
+      destinationZone: 'dmz',
+      vendor: 'fortigate',
+      rawConfig: {
+        name: 'Database Access Policy',
+        srcintf: 'internal',
+        dstintf: 'dmz',
+        srcaddr: '10.1.1.5',
+        dstaddr: '192.168.1.10',
+        action: 'accept',
+        schedule: 'always',
+        service: 'HTTPS',
+        logtraffic: 'all'
+      },
+      cliConfig: 'config firewall policy\n  edit 0\n    set name "Database Access Policy"\n    set srcintf "internal"\n    set dstintf "dmz"\n    set srcaddr "10.1.1.5"\n    set dstaddr "192.168.1.10"\n    set action accept\n    set schedule "always"\n    set service "HTTPS"\n    set logtraffic all\n  next\nend'
+    },
+    {
+      id: 'POL-002',
+      name: 'API Service Access',
+      source: '172.16.0.50',
+      destination: 'api.example.com',
+      destPort: 8080,
+      action: 'Allow',
+      status: 'PendingApproval',
+      businessJustification: 'API integration for customer portal',
+      requestedBy: 'jane.smith@company.com',
+      targetDevice: 'FW-Primary-DC1',
+      sourceZone: 'internal',
+      destinationZone: 'external',
+      vendor: 'fortigate',
+      rawConfig: {
+        name: 'API Service Access',
+        srcintf: 'internal',
+        dstintf: 'external',
+        srcaddr: '172.16.0.50',
+        dstaddr: 'api.example.com',
+        action: 'accept',
+        schedule: 'always',
+        service: 'HTTP',
+        logtraffic: 'all'
+      },
+      cliConfig: 'config firewall policy\n  edit 0\n    set name "API Service Access"\n    set srcintf "internal"\n    set dstintf "external"\n    set srcaddr "172.16.0.50"\n    set dstaddr "api.example.com"\n    set action accept\n    set schedule "always"\n    set service "HTTP"\n    set logtraffic all\n  next\nend'
+    },
+    {
+      id: 'POL-003',
+      name: 'Inactive Policy Example',
+      source: '10.0.0.10',
+      destination: '192.168.1.20',
+      destPort: 22,
+      action: 'Allow',
+      status: 'Inactive',
+      businessJustification: 'SSH access for maintenance',
+      requestedBy: 'bob.wilson@company.com',
+      approvedBy: 'admin@company.com',
+      targetDevice: 'FW-Primary-DC1',
+      sourceZone: 'internal',
+      destinationZone: 'dmz',
+      vendor: 'fortigate',
+      rawConfig: {
+        name: 'Inactive Policy Example',
+        srcintf: 'internal',
+        dstintf: 'dmz',
+        srcaddr: '10.0.0.10',
+        dstaddr: '192.168.1.20',
+        action: 'accept',
+        schedule: 'always',
+        service: 'SSH',
+        logtraffic: 'all'
+      },
+      cliConfig: 'config firewall policy\n  edit 0\n    set name "Inactive Policy Example"\n    set srcintf "internal"\n    set dstintf "dmz"\n    set srcaddr "10.0.0.10"\n    set dstaddr "192.168.1.20"\n    set action accept\n    set schedule "always"\n    set service "SSH"\n    set logtraffic all\n  next\nend'
+    }
+  ];
+
+  for (const policy of samplePolicies) {
+    await prisma.policy.upsert({
+      where: { id: policy.id },
+      update: policy,
+      create: policy,
+    });
+  }
+  console.log('✅ Sample policies created');
+
+  // Create policy history entries
+  const policyHistoryEntries = [
+    // POL-001 history
+    {
+      policyId: 'POL-001',
+      action: 'created',
+      performedBy: 'john.doe@company.com',
+      comment: 'Policy created via AI chat for database access',
+      previousStatus: null,
+      newStatus: 'PendingApproval'
+    },
+    {
+      policyId: 'POL-001',
+      action: 'approved',
+      performedBy: 'admin@company.com',
+      comment: 'Approved for production database access',
+      previousStatus: 'PendingApproval',
+      newStatus: 'Approved'
+    },
+    {
+      policyId: 'POL-001',
+      action: 'deployed',
+      performedBy: 'admin@company.com',
+      comment: 'Deployed to FW-Primary-DC1',
+      previousStatus: 'Approved',
+      newStatus: 'Active'
+    },
+    // POL-002 history
+    {
+      policyId: 'POL-002',
+      action: 'created',
+      performedBy: 'jane.smith@company.com',
+      comment: 'Policy created for API integration',
+      previousStatus: null,
+      newStatus: 'PendingApproval'
+    },
+    // POL-003 history
+    {
+      policyId: 'POL-003',
+      action: 'created',
+      performedBy: 'bob.wilson@company.com',
+      comment: 'Policy created for SSH access',
+      previousStatus: null,
+      newStatus: 'PendingApproval'
+    },
+    {
+      policyId: 'POL-003',
+      action: 'deactivated',
+      performedBy: 'admin@company.com',
+      comment: 'Deactivated: SSH access no longer needed',
+      previousStatus: 'Active',
+      newStatus: 'Inactive'
+    }
+  ];
+
+  for (const history of policyHistoryEntries) {
+    await prisma.policyHistory.create({
+      data: history,
+    });
+  }
+  console.log('✅ Policy history created');
+
   console.log('🎉 AI Agent data seeded successfully!');
 }
 

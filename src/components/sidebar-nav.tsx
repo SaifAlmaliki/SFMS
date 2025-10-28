@@ -55,8 +55,8 @@ export function SidebarNav() {
       <SidebarContent className="p-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname === '/'} tooltip="Dashboard">
-              <Link href="/">
+            <SidebarMenuButton asChild isActive={pathname === '/dashboard'} tooltip="Dashboard">
+              <Link href="/dashboard">
                 <Home />
                 Dashboard
               </Link>

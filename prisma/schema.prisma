@@ -19,6 +19,7 @@ model Policy {
   name       String
   source     String
   destination String
+  destPort   Int?        // Destination port number
   action     PolicyAction // 'Allow' | 'Deny'
   status     PolicyStatus // 'Active' | 'Inactive' | 'Pending Approval'
   createdAt  DateTime @default(now())
@@ -30,9 +31,18 @@ model Policy {
   rawConfig  Json?       // Store vendor-specific configuration
   cliConfig  String?     @db.Text // Store CLI configuration
   
+  // New fields for tracking
+  sourceZone      String?   // e.g., "internal", "dmz"
+  destinationZone String?   // e.g., "dmz", "external"
+  targetDevice    String?   // Device this policy applies to
+  businessJustification String? @db.Text
+  requestedBy     String?
+  approvedBy      String?
+  
   // Relationships
   ticket     ChangeTicket?
   deployments PolicyDeployment[]
+  history    PolicyHistory[]
 }
 
 enum PolicyAction {
@@ -372,6 +382,21 @@ model PolicyDeployment {
   errorMessage String?          @db.Text
   rollbackId   String?
   policy       Policy           @relation(fields: [policyId], references: [id])
+}
+
+// Policy History Tracking
+model PolicyHistory {
+  id          String   @id @default(cuid())
+  policyId    String
+  action      String   // "created", "approved", "deployed", "rejected", "deactivated"
+  performedBy String
+  performedAt DateTime @default(now())
+  comment     String?  @db.Text
+  previousStatus String?
+  newStatus      String?
+  
+  // Relationships
+  policy      Policy   @relation(fields: [policyId], references: [id], onDelete: Cascade)
 }
 
 enum DeploymentStatus {

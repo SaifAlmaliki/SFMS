@@ -187,15 +187,29 @@ export async function chatAction(_prevState: any, formData: FormData) {
     }
 
     try {
-        // Import the enhanced chat agent
-        const { firewallChatAgent } = await import('@/ai/flows/firewall-chat-agent');
-        
-        const result = await firewallChatAgent({
-            query: validatedFields.data.query,
-            userId: validatedFields.data.userId || 'user-001',
-            conversationId: validatedFields.data.conversationId,
-            vendor: validatedFields.data.vendor || 'fortigate',
-        });
+        // Try to use the AI-powered chat agent first
+        let result;
+        try {
+            const { firewallChatAgent } = await import('@/ai/flows/firewall-chat-agent');
+            result = await firewallChatAgent({
+                query: validatedFields.data.query,
+                userId: validatedFields.data.userId || 'user-001',
+                conversationId: validatedFields.data.conversationId,
+                vendor: validatedFields.data.vendor || 'fortigate',
+                externalSystem: validatedFields.data.externalSystem,
+            });
+        } catch (aiError) {
+            // Fallback to non-AI version if API key is not configured
+            console.log('AI API not available, using simple chat agent');
+            const { firewallChatAgent } = await import('@/ai/flows/firewall-chat-agent-simple');
+            result = await firewallChatAgent({
+                query: validatedFields.data.query,
+                userId: validatedFields.data.userId || 'user-001',
+                conversationId: validatedFields.data.conversationId,
+                vendor: validatedFields.data.vendor || 'fortigate',
+                externalSystem: validatedFields.data.externalSystem,
+            });
+        }
         
         return {
             response: result.response,
@@ -204,6 +218,13 @@ export async function chatAction(_prevState: any, formData: FormData) {
             ticketId: result.ticketId,
             vendor: result.vendor,
             cliConfig: result.cliConfig,
+            externalTicketCreated: result.externalTicketCreated || false,
+            externalTicketId: result.externalTicketId,
+            externalTicketUrl: result.externalTicketUrl,
+            duplicateFound: result.duplicateFound || false,
+            matchedPolicies: result.matchedPolicies || [],
+            missingJustification: result.missingJustification || false,
+            parsedRequest: result.parsedRequest,
         };
     } catch (e) {
         console.error('Chat action error:', e);
@@ -436,7 +457,7 @@ export async function createIncidentAction(_prevState: any, formData: FormData) 
 }
 
 // Ticket Management Actions
-export async function approveTicketAction(ticketId: string) {
+export async function approveTicketAction(ticketId: string, comment?: string) {
   const { inngest } = await import('@/inngest/client');
   const { PrismaClient } = await import('../generated/prisma');
   const prisma = new PrismaClient();
@@ -448,11 +469,11 @@ export async function approveTicketAction(ticketId: string) {
     });
 
     if (!ticket) {
-      throw new Error('Ticket not found');
+      return { success: false, error: 'Ticket not found' };
     }
 
     if (ticket.status !== 'PendingApproval') {
-      throw new Error('Ticket is not pending approval');
+      return { success: false, error: 'Ticket is not pending approval' };
     }
 
     // Update ticket status
@@ -464,6 +485,17 @@ export async function approveTicketAction(ticketId: string) {
       },
     });
 
+    // Add approval comment if provided
+    if (comment) {
+      await prisma.ticketComment.create({
+        data: {
+          ticketId: ticketId,
+          author: 'admin@company.com', // Default admin user
+          content: comment,
+        },
+      });
+    }
+
     // If ticket has a policy, trigger deployment
     if (ticket.policy) {
       await inngest.send({
@@ -471,8 +503,8 @@ export async function approveTicketAction(ticketId: string) {
         data: {
           policyId: ticket.policyId!,
           ticketId: ticketId,
-          deployedBy: ticket.requestedBy,
-          targetDevice: 'FW-Primary-DC1', // Default device
+          deployedBy: 'admin@company.com',
+          targetDevice: ticket.policy.targetDevice || 'FW-Primary-DC1',
         },
       });
     }
@@ -480,11 +512,11 @@ export async function approveTicketAction(ticketId: string) {
     return { success: true };
   } catch (e) {
     console.error('Failed to approve ticket:', e);
-    throw e;
+    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
   }
 }
 
-export async function rejectTicketAction(ticketId: string) {
+export async function rejectTicketAction(ticketId: string, reason: string) {
   const { PrismaClient } = await import('../generated/prisma');
   const prisma = new PrismaClient();
 
@@ -494,6 +526,15 @@ export async function rejectTicketAction(ticketId: string) {
       data: {
         status: 'Rejected',
         updatedAt: new Date(),
+      },
+    });
+
+    // Add rejection comment
+    await prisma.ticketComment.create({
+      data: {
+        ticketId: ticketId,
+        author: 'admin@company.com', // Default admin user
+        content: `Rejected: ${reason}`,
       },
     });
 
@@ -513,7 +554,7 @@ export async function rejectTicketAction(ticketId: string) {
     return { success: true };
   } catch (e) {
     console.error('Failed to reject ticket:', e);
-    throw e;
+    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
   }
 }
 

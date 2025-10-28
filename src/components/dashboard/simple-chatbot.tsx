@@ -10,13 +10,8 @@ import { Send, Bot, User, AlertTriangle, CheckCircle, ExternalLink } from 'lucid
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { VendorSelector } from '@/components/fortigate/vendor-selector';
-import { DuplicatePolicyWarning } from '@/components/policies/duplicate-policy-warning';
-import { JustificationWarning } from '@/components/policies/justification-warning';
-import { PolicyHistoryViewer } from '@/components/policies/policy-history-viewer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 
 interface Message {
   sender: 'user' | 'bot';
@@ -62,7 +57,7 @@ function SubmitButton() {
   );
 }
 
-export function Chatbot() {
+export function SimpleChatbot() {
   const [state, formAction] = useActionState(chatAction, initialState);
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedVendor, setSelectedVendor] = useState('fortigate');
@@ -99,7 +94,7 @@ export function Chatbot() {
     if (state?.error) {
       setMessages((prev) => [
         ...prev,
-        { sender: 'bot', text: state.error as string },
+        { sender: 'bot', text: `Error: ${state.error}` },
       ]);
     }
     formRef.current?.reset();
@@ -127,50 +122,22 @@ export function Chatbot() {
     }
   };
 
-  const handleProceedAnyway = () => {
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage?.metadata?.parsedRequest) {
-      const proceedQuery = `Proceed anyway with policy: ${lastMessage.metadata.parsedRequest.sourceIp} to ${lastMessage.metadata.parsedRequest.destinationIp || lastMessage.metadata.parsedRequest.destinationFqdn}:${lastMessage.metadata.parsedRequest.port}`;
-      setMessages((prev) => [...prev, { sender: 'user', text: proceedQuery }]);
-      
-      const formData = new FormData();
-      formData.set('query', proceedQuery);
-      formData.set('vendor', selectedVendor);
-      formData.set('externalSystem', selectedExternalSystem);
-      formData.set('conversationId', conversationId);
-      formData.set('userId', 'user-001');
-      
-      formAction(formData);
-    }
-  };
-
-  const handleJustificationProvided = (justification: string) => {
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage?.metadata?.parsedRequest) {
-      const justifiedQuery = `${lastMessage.metadata.parsedRequest.sourceIp} to ${lastMessage.metadata.parsedRequest.destinationIp || lastMessage.metadata.parsedRequest.destinationFqdn}:${lastMessage.metadata.parsedRequest.port} for ${justification}`;
-      setMessages((prev) => [...prev, { sender: 'user', text: justifiedQuery }]);
-      
-      const formData = new FormData();
-      formData.set('query', justifiedQuery);
-      formData.set('vendor', selectedVendor);
-      formData.set('externalSystem', selectedExternalSystem);
-      formData.set('conversationId', conversationId);
-      formData.set('userId', 'user-001');
-      
-      formAction(formData);
-    }
-  };
-
   return (
     <div className="flex flex-col h-[500px]">
       {/* Vendor Selection */}
       <div className="p-4 border-b bg-background">
         <div className="flex gap-4 items-end">
           <div className="flex-1">
-            <VendorSelector 
-              onVendorChange={setSelectedVendor}
-              defaultValue={selectedVendor}
-            />
+            <label className="text-sm font-medium">Firewall Vendor</label>
+            <select 
+              value={selectedVendor} 
+              onChange={(e) => setSelectedVendor(e.target.value)}
+              className="w-full mt-1 px-3 py-2 border rounded-md bg-background"
+            >
+              <option value="fortigate">FortiGate</option>
+              <option value="paloalto">Palo Alto</option>
+              <option value="cisco">Cisco</option>
+            </select>
           </div>
           <div className="flex-1">
             <label className="text-sm font-medium">External System</label>
@@ -260,31 +227,38 @@ export function Chatbot() {
 
                   {/* Duplicate Policy Warning */}
                   {message.metadata.duplicateFound && message.metadata.matchedPolicies && (
-                    <DuplicatePolicyWarning
-                      matchedPolicies={message.metadata.matchedPolicies}
-                      onProceedAnyway={handleProceedAnyway}
-                      onCancel={() => {}}
-                    />
+                    <Card className="border-yellow-500 bg-yellow-50/50">
+                      <CardHeader>
+                        <CardTitle className="text-yellow-700 text-sm">⚠️ Duplicate Policy Detected!</CardTitle>
+                        <CardDescription className="text-xs">
+                          An existing policy already covers the requested connection.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {message.metadata.matchedPolicies.map((policy: any) => (
+                          <div key={policy.id} className="rounded-md border p-3 bg-background">
+                            <h4 className="font-semibold text-sm">Policy ID: {policy.id}</h4>
+                            <p className="text-xs"><strong>Source:</strong> {policy.source}</p>
+                            <p className="text-xs"><strong>Destination:</strong> {policy.destination}:{policy.destPort}</p>
+                            <div className="text-xs flex items-center gap-1"><strong>Status:</strong> <Badge variant="outline" className="text-xs">{policy.status}</Badge></div>
+                            <p className="text-xs"><strong>Requested By:</strong> {policy.requestedBy || 'N/A'}</p>
+                            <p className="text-xs"><strong>Business Justification:</strong> {policy.businessJustification || 'N/A'}</p>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
                   )}
 
                   {/* Missing Justification Warning */}
                   {message.metadata.missingJustification && (
-                    <JustificationWarning
-                      onJustificationProvided={handleJustificationProvided}
-                      onProceedWithout={() => {
-                        const proceedQuery = `${message.metadata.parsedRequest.sourceIp} to ${message.metadata.parsedRequest.destinationIp || message.metadata.parsedRequest.destinationFqdn}:${message.metadata.parsedRequest.port}`;
-                        setMessages((prev) => [...prev, { sender: 'user', text: proceedQuery }]);
-                        
-                        const formData = new FormData();
-                        formData.set('query', proceedQuery);
-                        formData.set('vendor', selectedVendor);
-                        formData.set('externalSystem', selectedExternalSystem);
-                        formData.set('conversationId', conversationId);
-                        formData.set('userId', 'user-001');
-                        
-                        formAction(formData);
-                      }}
-                    />
+                    <Card className="border-orange-500 bg-orange-50/50">
+                      <CardHeader>
+                        <CardTitle className="text-orange-700 text-sm">⚠️ Business Justification Missing</CardTitle>
+                        <CardDescription className="text-xs">
+                          Providing a business justification is highly recommended for policy approval.
+                        </CardDescription>
+                      </CardHeader>
+                    </Card>
                   )}
 
                   {/* CLI Configuration */}

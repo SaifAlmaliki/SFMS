@@ -6,7 +6,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PolicyGenerator } from '@/components/dashboard/policy-generator';
+import { SimpleChatbot } from '@/components/dashboard/simple-chatbot';
 import { SelfHealing } from '@/components/ai-tools/self-healing';
 import { ModelManagement } from '@/components/ai-tools/model-management';
 import { AnomalyDetection } from '@/components/ai-tools/anomaly-detection';
@@ -33,13 +33,13 @@ export default function AiToolsPage() {
         <TabsContent value="policy-generator">
           <Card>
             <CardHeader>
-              <CardTitle>AI Policy Generator</CardTitle>
+              <CardTitle>AI Policy Generator with Duplicate Detection</CardTitle>
               <CardDescription>
-                Use natural language to generate firewall policies.
+                Use natural language to generate firewall policies with intelligent duplicate detection and external ticket integration.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <PolicyGenerator />
+            <CardContent className="p-0">
+              <SimpleChatbot />
             </CardContent>
           </Card>
         </TabsContent>

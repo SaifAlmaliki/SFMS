@@ -7,6 +7,8 @@ import { z } from 'genkit';
 import { PrismaClient } from '../../generated/prisma';
 import { FORTIGATE_VENDOR, convertToVendorFormat, validatePolicy } from '@/lib/firewall-vendors';
 import { ExternalTicketService } from '@/lib/external-ticket-service';
+import { PolicyRequestParser } from '@/lib/policy-parser';
+import { PolicyMatcherService } from '@/lib/policy-matcher';
 
 const prisma = new PrismaClient();
 
@@ -31,6 +33,10 @@ const FirewallChatAgentOutputSchema = z.object({
   externalTicketCreated: z.boolean().optional().describe('Whether an external ticket was created'),
   externalTicketId: z.string().optional().describe('The external ticket ID'),
   externalTicketUrl: z.string().optional().describe('The external ticket URL'),
+  duplicateFound: z.boolean().optional().describe('Whether duplicate policies were found'),
+  matchedPolicies: z.array(z.any()).optional().describe('Matched existing policies'),
+  missingJustification: z.boolean().optional().describe('Whether business justification is missing'),
+  parsedRequest: z.any().optional().describe('Parsed policy request details'),
 });
 
 export type FirewallChatAgentOutput = z.infer<typeof FirewallChatAgentOutputSchema>;
@@ -48,6 +54,14 @@ function isPolicyRequest(query: string): boolean {
     'firewall rule',
     'policy from',
     'policy to',
+    'allow',
+    'deny',
+    'block',
+    'permit',
+    'from',
+    'to',
+    'port',
+    'protocol'
   ];
   
   const lowerQuery = query.toLowerCase();
@@ -123,7 +137,10 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
 
   // Check if this is a policy request
   const shouldCreatePolicy = isPolicyRequest(query);
-  const policyDetails = shouldCreatePolicy ? parsePolicyRequest(query) : null;
+  let parsedRequest: any = null;
+  let duplicateFound = false;
+  let matchedPolicies: any[] = [];
+  let missingJustification = false;
   
   let ticketId: string | undefined;
   let ticketCreated = false;
@@ -133,19 +150,57 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
   let externalTicketId: string | undefined;
   let externalTicketUrl: string | undefined;
 
+  // Parse policy request if needed
+  if (shouldCreatePolicy) {
+    const parseResult = PolicyRequestParser.parse(query);
+    if (parseResult.success) {
+      parsedRequest = parseResult.data;
+      missingJustification = !parsedRequest.businessJustification;
+      
+      // Check for duplicates
+      const policyMatcher = new PolicyMatcherService();
+      const matchResult = await policyMatcher.findExactMatches(parsedRequest);
+      
+      if (matchResult.hasMatch) {
+        duplicateFound = true;
+        matchedPolicies = matchResult.matchedPolicies;
+      }
+    }
+  }
+
   // Build context for AI with vendor-specific information
   let systemContext = `You are an expert firewall administrator assistant helping users manage ${vendor.toUpperCase()} firewall policies.
 You can help create policies, answer questions about firewall configurations, and provide security recommendations.
 Be concise and helpful.`;
-  
-  if (shouldCreatePolicy && policyDetails) {
-    systemContext += `\n\nThe user wants to create a ${vendor.toUpperCase()} firewall policy:
-- Action: ${policyDetails.action}
-- Source: ${policyDetails.source}
-- Destination: ${policyDetails.destination}
-- Policy Name: ${policyDetails.name}
+        
+  if (shouldCreatePolicy && parsedRequest) {
+    if (duplicateFound) {
+      systemContext += `\n\nIMPORTANT: The user wants to create a ${vendor.toUpperCase()} firewall policy, but DUPLICATE POLICIES WERE FOUND:
+- Source: ${parsedRequest.sourceIp}
+- Destination: ${parsedRequest.destinationIp || parsedRequest.destinationFqdn || parsedRequest.destinationUrl}
+- Port: ${parsedRequest.port}
+- Business Justification: ${parsedRequest.businessJustification || 'NOT PROVIDED'}
 
-Generate this policy in ${vendor.toUpperCase()} format and explain what it does. Then create a change ticket for admin approval.`;
+EXISTING POLICIES FOUND:
+${matchedPolicies.map(p => `- Policy ${p.id}: ${p.source} → ${p.destination}:${p.destPort} (${p.status}) - Created by ${p.requestedBy} - Business Justification: ${p.businessJustification || 'N/A'}`).join('\n')}
+
+RESPONSE REQUIRED: Inform the user about the existing policies, show the policy details, and ask if they want to proceed anyway. DO NOT create a new policy.`;
+    } else if (missingJustification) {
+      systemContext += `\n\nIMPORTANT: The user wants to create a ${vendor.toUpperCase()} firewall policy, but BUSINESS JUSTIFICATION IS MISSING:
+- Source: ${parsedRequest.sourceIp}
+- Destination: ${parsedRequest.destinationIp || parsedRequest.destinationFqdn || parsedRequest.destinationUrl}
+- Port: ${parsedRequest.port}
+
+RESPONSE REQUIRED: Warn the user that business justification is missing and may delay approval. Ask them to provide justification or proceed without it. DO NOT create a new policy yet.`;
+    } else {
+      systemContext += `\n\nIMPORTANT: The user wants to create a ${vendor.toUpperCase()} firewall policy:
+- Source: ${parsedRequest.sourceIp}
+- Destination: ${parsedRequest.destinationIp || parsedRequest.destinationFqdn || parsedRequest.destinationUrl}
+- Port: ${parsedRequest.port}
+- Business Justification: ${parsedRequest.businessJustification}
+
+RESPONSE REQUIRED: Confirm the policy details and inform them that a change ticket will be created for admin approval.`;
+    }
   }
 
   // Build conversation context
@@ -179,11 +234,11 @@ Provide a helpful response.`,
     },
   });
 
-  // If this is a policy request, create a ticket and draft policy
-  if (shouldCreatePolicy && policyDetails) {
+  // If this is a policy request and no duplicates found, create a ticket and draft policy
+  if (shouldCreatePolicy && parsedRequest && !duplicateFound) {
     try {
       // Convert to vendor-specific format
-      const vendorPolicy = convertToVendorFormat(policyDetails, FORTIGATE_VENDOR);
+      const vendorPolicy = convertToVendorFormat(parsedRequest, FORTIGATE_VENDOR);
       
       // Validate the policy
       const validation = validatePolicy(vendorPolicy, FORTIGATE_VENDOR);
@@ -201,14 +256,22 @@ Provide a helpful response.`,
       const policy = await prisma.policy.create({
         data: {
           id: policyId,
-          name: policyDetails.name,
-          source: policyDetails.source,
-          destination: policyDetails.destination,
-          action: policyDetails.action,
+          name: parsedRequest.businessJustification ? 
+            `Policy for ${parsedRequest.businessJustification.substring(0, 30)}` :
+            `Policy ${parsedRequest.sourceIp} to ${parsedRequest.destinationIp || parsedRequest.destinationFqdn}:${parsedRequest.port}`,
+          source: parsedRequest.sourceIp,
+          destination: parsedRequest.destinationIp || parsedRequest.destinationFqdn || parsedRequest.destinationUrl || '',
+          destPort: parsedRequest.port,
+          action: 'Allow',
           status: 'PendingApproval',
           vendor: vendor,
           rawConfig: vendorPolicy,
           cliConfig: cliConfig,
+          businessJustification: parsedRequest.businessJustification,
+          requestedBy: userId,
+          targetDevice: parsedRequest.targetDevice,
+          sourceZone: parsedRequest.sourceZone,
+          destinationZone: parsedRequest.destinationZone,
         },
       });
 
@@ -221,7 +284,7 @@ Provide a helpful response.`,
           ticketNumber,
           policyId: policy.id,
           requestedBy: userId,
-          title: `Create ${vendor.toUpperCase()} Policy: ${policyDetails.name}`,
+          title: `Create ${vendor.toUpperCase()} Policy: ${policy.name}`,
           description: `${vendor.toUpperCase()} policy requested via AI chat: ${query}`,
           status: 'PendingApproval',
           priority: 'Medium',
@@ -255,6 +318,16 @@ Provide a helpful response.`,
           console.error('Failed to create external ticket:', error);
         }
       }
+
+      // Create policy history entry
+      const policyMatcher = new PolicyMatcherService();
+      await policyMatcher.createPolicyHistory(
+        policy.id,
+        'created',
+        userId,
+        `Policy created via AI chat: ${query}`
+      );
+
     } catch (error) {
       console.error('Error creating policy and ticket:', error);
     }
@@ -271,6 +344,10 @@ Provide a helpful response.`,
     externalTicketCreated,
     externalTicketId,
     externalTicketUrl,
+    duplicateFound,
+    matchedPolicies,
+    missingJustification,
+    parsedRequest,
   };
 }
 
