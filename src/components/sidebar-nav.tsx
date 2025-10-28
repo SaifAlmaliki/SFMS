@@ -17,6 +17,7 @@ import {
   Network,
   ChevronDown,
   Layers,
+  UserCheck,
 } from 'lucide-react';
 import {
   SidebarHeader,
@@ -147,6 +148,14 @@ export function SidebarNav() {
               <Link href="/reports">
                 <BarChart />
                 Reports
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname.startsWith('/admin')} tooltip="Admin Approvals">
+              <Link href="/admin/approvals">
+                <UserCheck />
+                Admin Approvals
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
