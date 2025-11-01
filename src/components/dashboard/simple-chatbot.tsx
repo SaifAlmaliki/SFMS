@@ -57,7 +57,17 @@ function SubmitButton() {
   );
 }
 
-export function SimpleChatbot() {
+interface SimpleChatbotProps {
+  initialQuery?: string;
+  templateId?: string;
+  templateContext?: {
+    name: string;
+    category: string;
+    description: string;
+  };
+}
+
+export function SimpleChatbot({ initialQuery, templateId, templateContext }: SimpleChatbotProps = {}) {
   const [state, formAction] = useActionState(chatAction, initialState);
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedVendor, setSelectedVendor] = useState('fortigate');
@@ -65,6 +75,20 @@ export function SimpleChatbot() {
   const [conversationId, setConversationId] = useState('');
   const formRef = useRef<HTMLFormElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Initialize with template context if provided
+  useEffect(() => {
+    if (initialQuery && messages.length === 0) {
+      // Set initial query in input if provided
+      if (inputRef.current) {
+        inputRef.current.value = initialQuery;
+      }
+      
+      // Optionally auto-submit if query is provided
+      // You can remove this if you want user to manually submit
+    }
+  }, [initialQuery, messages.length]);
 
   useEffect(() => {
     if (state?.response) {
@@ -124,6 +148,21 @@ export function SimpleChatbot() {
 
   return (
     <div className="flex flex-col h-[500px]">
+      {/* Template Context Banner */}
+      {templateContext && (
+        <div className="p-4 border-b bg-blue-500/10 border-blue-500/20">
+          <div className="flex items-start gap-3">
+            <div className="flex-1">
+              <p className="text-sm font-medium">Using Template: {templateContext.name}</p>
+              <p className="text-xs text-muted-foreground mt-1">{templateContext.description}</p>
+            </div>
+            <Badge variant="outline" className="bg-blue-500/20 text-blue-500">
+              {templateContext.category}
+            </Badge>
+          </div>
+        </div>
+      )}
+
       {/* Vendor Selection */}
       <div className="p-4 border-b bg-background">
         <div className="flex gap-4 items-end">
@@ -385,8 +424,10 @@ export function SimpleChatbot() {
         
         <form ref={formRef} action={handleFormSubmit} className="flex gap-2">
           <Input
+            ref={inputRef}
             name="query"
-            placeholder='Try: "Allow 10.1.1.5 to 192.168.1.10:443" or "List all policies"...'
+            placeholder={templateContext ? `Customize "${templateContext.name}" template...` : 'Try: "Allow 10.1.1.5 to 192.168.1.10:443" or "List all policies"...'}
+            defaultValue={initialQuery}
             autoComplete="off"
             className="bg-card"
           />

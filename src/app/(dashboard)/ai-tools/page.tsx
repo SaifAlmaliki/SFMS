@@ -6,14 +6,20 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { SimpleChatbot } from '@/components/dashboard/simple-chatbot';
+import { AiToolsPageClient } from '@/components/ai-tools/ai-tools-page-client';
 import { SelfHealing } from '@/components/ai-tools/self-healing';
 import { ModelManagement } from '@/components/ai-tools/model-management';
 import { AnomalyDetection } from '@/components/ai-tools/anomaly-detection';
 import { PolicyValidation } from '@/components/ai-tools/policy-validation';
 import { PolicySimulation } from '@/components/ai-tools/policy-simulation';
 
-export default function AiToolsPage() {
+interface AiToolsPageProps {
+  searchParams: Promise<{ template?: string; query?: string }>;
+}
+
+export default async function AiToolsPage({ searchParams }: AiToolsPageProps) {
+  const params = await searchParams;
+  
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">AI Tools</h1>
@@ -36,10 +42,14 @@ export default function AiToolsPage() {
               <CardTitle>AI Policy Generator with Duplicate Detection</CardTitle>
               <CardDescription>
                 Use natural language to generate firewall policies with intelligent duplicate detection and external ticket integration.
+                {params.template && ' (Using template context)'}
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
-              <SimpleChatbot />
+              <AiToolsPageClient 
+                templateId={params.template}
+                initialQuery={params.query}
+              />
             </CardContent>
           </Card>
         </TabsContent>
