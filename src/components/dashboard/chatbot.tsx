@@ -276,7 +276,7 @@ export function Chatbot() {
                       : 'bg-muted'
                   )}
                 >
-                  {message.text}
+                  <div className="whitespace-pre-wrap break-words">{message.text}</div>
                 </div>
                 {message.sender === 'user' && (
                   <Avatar className="h-8 w-8">

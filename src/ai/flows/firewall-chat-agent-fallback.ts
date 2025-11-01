@@ -83,21 +83,67 @@ function isListPoliciesRequest(query: string): boolean {
 }
 
 /**
- * Format policies for display
+ * Format policies for display with comprehensive details
  */
 function formatPoliciesList(policies: any[]): string {
   if (policies.length === 0) {
     return 'No policies found in the database.';
   }
 
-  let formatted = `Here are the existing policies (${policies.length} total):\n\n`;
+  // Group policies by status
+  const activePolicies = policies.filter(p => p.status === 'Active');
+  const inactivePolicies = policies.filter(p => p.status === 'Inactive');
+  const pendingPolicies = policies.filter(p => p.status === 'PendingApproval');
+  const rejectedPolicies = policies.filter(p => p.status === 'Rejected');
+
+  // Start with summary first for better readability
+  let formatted = `SUMMARY\n`;
+  formatted += `═══════════════════════════════════════════\n`;
+  formatted += `Total Policies: ${policies.length}\n`;
+  if (activePolicies.length > 0) {
+    formatted += `Active: ${activePolicies.length} (${activePolicies.map(p => p.id).join(', ')})\n`;
+  }
+  if (pendingPolicies.length > 0) {
+    formatted += `Pending Approval: ${pendingPolicies.length} (${pendingPolicies.map(p => p.id).join(', ')})\n`;
+  }
+  if (inactivePolicies.length > 0) {
+    formatted += `Inactive: ${inactivePolicies.length} (${inactivePolicies.map(p => p.id).join(', ')})\n`;
+  }
+  if (rejectedPolicies.length > 0) {
+    formatted += `Rejected: ${rejectedPolicies.length} (${rejectedPolicies.map(p => p.id).join(', ')})\n`;
+  }
+  formatted += `\n═══════════════════════════════════════════\n`;
+  formatted += `POLICY DETAILS\n`;
+  formatted += `═══════════════════════════════════════════\n\n`;
   
   policies.forEach((policy, index) => {
-    formatted += `${index + 1}. **Policy ${policy.id}**: ${policy.name}\n`;
-    formatted += `   - Source: ${policy.source} → Destination: ${policy.destination}:${policy.destPort || 'N/A'}\n`;
-    formatted += `   - Action: ${policy.action} | Status: ${policy.status}\n`;
+    formatted += `${index + 1}. Policy ${policy.id}\n`;
+    formatted += `   ${policy.name}\n\n`;
+    formatted += `   Source: ${policy.source}\n`;
+    formatted += `   Destination: ${policy.destination}:${policy.destPort || 'Any'}\n`;
+    formatted += `   Action: ${policy.action}\n`;
+    formatted += `   Status: ${policy.status}\n`;
     if (policy.vendor) {
-      formatted += `   - Vendor: ${policy.vendor}\n`;
+      formatted += `   Vendor: ${policy.vendor}\n`;
+    }
+    if (policy.targetDevice) {
+      formatted += `   Target Device: ${policy.targetDevice}\n`;
+    }
+    if (policy.sourceZone || policy.destinationZone) {
+      formatted += `   Zones: ${policy.sourceZone || 'N/A'} → ${policy.destinationZone || 'N/A'}\n`;
+    }
+    if (policy.requestedBy) {
+      formatted += `   Requested By: ${policy.requestedBy}\n`;
+    }
+    if (policy.approvedBy) {
+      formatted += `   Approved By: ${policy.approvedBy}\n`;
+    }
+    if (policy.businessJustification) {
+      formatted += `   Business Justification: ${policy.businessJustification}\n`;
+    }
+    formatted += `   Created: ${new Date(policy.createdAt).toLocaleDateString()} at ${new Date(policy.createdAt).toLocaleTimeString()}\n`;
+    if (policy.updatedAt && policy.updatedAt !== policy.createdAt) {
+      formatted += `   Last Updated: ${new Date(policy.updatedAt).toLocaleDateString()}\n`;
     }
     formatted += `\n`;
   });
