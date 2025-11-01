@@ -292,13 +292,13 @@ export function Chatbot() {
                 <div className="ml-11 space-y-2">
                   {/* Ticket Created */}
                   {message.metadata.ticketCreated && (
-                    <Card className="border-green-200 bg-green-50/50">
+                    <Card className="border-green-500/30 bg-green-500/10 dark:bg-green-500/20">
                       <CardContent className="p-3">
-                        <div className="flex items-center gap-2 text-green-700">
-                          <CheckCircle className="h-4 w-4" />
+                        <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-500" />
                           <span className="text-sm font-medium">Change Ticket Created</span>
                         </div>
-                        <p className="text-xs text-green-600 mt-1">Ticket ID: {message.metadata.ticketId}</p>
+                        <p className="text-xs text-green-600 dark:text-green-400 mt-1">Ticket ID: {message.metadata.ticketId}</p>
                         {message.metadata.externalTicketCreated && (
                           <div className="flex items-center gap-2 mt-2">
                             <ExternalLink className="h-3 w-3" />

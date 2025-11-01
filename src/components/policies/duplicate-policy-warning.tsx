@@ -113,9 +113,9 @@ export function DuplicatePolicyWarning({
 
   return (
     <div className="space-y-4">
-      <Alert className="border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20">
-        <AlertTriangle className="h-4 w-4 text-yellow-600" />
-        <AlertDescription className="text-yellow-800 dark:text-yellow-200">
+      <Alert className="border-amber-500/40 bg-amber-500/10 dark:bg-amber-500/20">
+        <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+        <AlertDescription className="text-amber-800 dark:text-amber-200">
           <strong>Duplicate Policy Detected!</strong> Found {matchedPolicies.length} existing policy(ies) 
           that cover the same connection. Review the details below before proceeding.
         </AlertDescription>

@@ -259,13 +259,13 @@ export function SimpleChatbot() {
                 <div className="ml-11 space-y-2">
                   {/* Ticket Created */}
                   {message.metadata.ticketCreated && (
-                    <Card className="border-green-200 bg-green-50/50">
+                    <Card className="border-green-500/30 bg-green-500/10 dark:bg-green-500/20">
                       <CardContent className="p-3">
-                        <div className="flex items-center gap-2 text-green-700">
-                          <CheckCircle className="h-4 w-4" />
+                        <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-500" />
                           <span className="text-sm font-medium">Change Ticket Created</span>
                         </div>
-                        <p className="text-xs text-green-600 mt-1">Ticket ID: {message.metadata.ticketId}</p>
+                        <p className="text-xs text-green-600 dark:text-green-400 mt-1">Ticket ID: {message.metadata.ticketId}</p>
                         {message.metadata.externalTicketCreated && (
                           <div className="flex items-center gap-2 mt-2">
                             <ExternalLink className="h-3 w-3" />
@@ -285,10 +285,10 @@ export function SimpleChatbot() {
 
                   {/* Duplicate Policy Warning */}
                   {message.metadata.duplicateFound && message.metadata.matchedPolicies && (
-                    <Card className="border-yellow-500 bg-yellow-50/50">
+                    <Card className="border-amber-500/40 bg-amber-500/10 dark:bg-amber-500/20">
                       <CardHeader>
-                        <CardTitle className="text-yellow-700 text-sm">⚠️ Duplicate Policy Detected!</CardTitle>
-                        <CardDescription className="text-xs">
+                        <CardTitle className="text-amber-700 dark:text-amber-400 text-sm">⚠️ Duplicate Policy Detected!</CardTitle>
+                        <CardDescription className="text-xs text-amber-600 dark:text-amber-300">
                           An existing policy already covers the requested connection.
                         </CardDescription>
                       </CardHeader>
@@ -309,10 +309,10 @@ export function SimpleChatbot() {
 
                   {/* Missing Justification Warning */}
                   {message.metadata.missingJustification && (
-                    <Card className="border-orange-500 bg-orange-50/50">
+                    <Card className="border-orange-500/40 bg-orange-500/10 dark:bg-orange-500/20">
                       <CardHeader>
-                        <CardTitle className="text-orange-700 text-sm">⚠️ Business Justification Missing</CardTitle>
-                        <CardDescription className="text-xs">
+                        <CardTitle className="text-orange-700 dark:text-orange-400 text-sm">⚠️ Business Justification Missing</CardTitle>
+                        <CardDescription className="text-xs text-orange-600 dark:text-orange-300">
                           Providing a business justification is highly recommended for policy approval.
                         </CardDescription>
                       </CardHeader>
