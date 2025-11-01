@@ -38,12 +38,16 @@ export async function POST(request: NextRequest) {
     // Use provided userId or default to 'system' for API calls
     const finalUserId = userId || 'system';
 
-    const report = await createAuditReport(query, userId, format);
+    const report = await createAuditReport(query, finalUserId, format);
 
     return NextResponse.json(report);
   } catch (error: any) {
+    console.error('Audit report generation error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to generate audit report' },
+      { 
+        error: error.message || 'Failed to generate audit report',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     );
   }

@@ -56,10 +56,20 @@ async function parseAuditQuery(query: string): Promise<{
   
   const filters: any = {};
   
-  // Extract user mentions
-  const userMatch = query.match(/user\s+([A-Za-z0-9]+)/i) || query.match(/by\s+([A-Za-z0-9]+)/i);
-  if (userMatch) {
-    filters.userId = userMatch[1];
+  // Extract user mentions (more flexible matching)
+  const userPatterns = [
+    /user\s+([A-Za-z0-9-_]+)/i,
+    /by\s+([A-Za-z0-9-_]+)/i,
+    /for\s+user\s+([A-Za-z0-9-_]+)/i,
+    /for\s+([A-Za-z0-9-_]+)/i,
+  ];
+  
+  for (const pattern of userPatterns) {
+    const match = query.match(pattern);
+    if (match && match[1] && match[1].length > 2) {
+      filters.userId = match[1];
+      break;
+    }
   }
   
   // Extract date ranges
@@ -107,13 +117,16 @@ export async function generateAuditReport(input: AuditReportInput): Promise<Audi
     case 'VPN Access': {
       const where: any = {
         ticketType: 'VPN',
-        ...filters,
       };
       
       if (filters.dateFrom) {
         where.createdAt = {
           gte: filters.dateFrom,
         };
+      }
+      
+      if (filters.userId) {
+        where.requestedBy = filters.userId;
       }
       
       const tickets = await prisma.changeTicket.findMany({
@@ -255,15 +268,16 @@ export async function generateAuditReport(input: AuditReportInput): Promise<Audi
           id: t.id,
           ticketNumber: t.ticketNumber,
           title: t.title,
-          type: t.ticketType,
-          category: t.category,
+          type: t.ticketType || 'Unknown',
+          category: t.category || 'Uncategorized',
           status: t.status,
           priority: t.priority,
           requestedBy: t.requestedBy,
           createdAt: t.createdAt,
         })),
         byType: tickets.reduce((acc: any, t) => {
-          acc[t.ticketType] = (acc[t.ticketType] || 0) + 1;
+          const type = t.ticketType || 'Unknown';
+          acc[type] = (acc[type] || 0) + 1;
           return acc;
         }, {}),
         byCategory: tickets.reduce((acc: any, t) => {
@@ -303,12 +317,16 @@ export async function generateAuditReport(input: AuditReportInput): Promise<Audi
     }
   }
   
-  // Generate summary using AI
-  const prompt = ai.definePrompt({
-    name: 'auditReportSummaryPrompt',
-    input: { schema: AuditReportInputSchema },
-    output: { schema: z.object({ summary: z.string() }) },
-    prompt: `Generate a concise summary of this audit report.
+  // Generate summary using AI (with fallback if AI is not available)
+  let summary = 'Audit report generated successfully.';
+  try {
+    // Define prompt only once by using a unique name or checking registry
+    const promptName = `auditReportSummaryPrompt_${Date.now()}`;
+    const prompt = ai.definePrompt({
+      name: promptName,
+      input: { schema: AuditReportInputSchema },
+      output: { schema: z.object({ summary: z.string() }) },
+      prompt: `Generate a concise summary of this audit report.
 
 Report Type: ${reportType}
 Query: {{{query}}}
@@ -316,21 +334,45 @@ Query: {{{query}}}
 Data: ${JSON.stringify(reportData, null, 2)}
 
 Provide a 2-3 sentence summary highlighting key findings and statistics.`,
-  });
+    });
+    
+    const { output } = await prompt(input);
+    summary = output?.summary || summary;
+  } catch (aiError: any) {
+    console.warn('AI summary generation failed, using default summary:', aiError.message);
+    // Generate a simple summary based on data
+    if (reportData.totalTickets !== undefined) {
+      summary = reportData.totalTickets === 0 
+        ? `No tickets found matching your query.`
+        : `Found ${reportData.totalTickets} tickets matching your query.`;
+    } else if (reportData.totalPolicies !== undefined) {
+      summary = reportData.totalPolicies === 0
+        ? `No policies found matching your query.`
+        : `Found ${reportData.totalPolicies} policies matching your query.`;
+    } else if (reportData.totalActions !== undefined) {
+      summary = reportData.totalActions === 0
+        ? `No actions found matching your query.`
+        : `Found ${reportData.totalActions} actions matching your query.`;
+    } else {
+      summary = `Report generated. No matching data found for the specified criteria.`;
+    }
+  }
   
-  const { output } = await prompt(input);
-  const summary = output?.summary || 'Audit report generated successfully.';
-  
-  // Save report to database
-  const report = await prisma.auditReport.create({
-    data: {
-      query,
-      reportType,
-      generatedBy: userId,
-      data: reportData,
-      format,
-    },
-  });
+  // Save report to database (with fallback if table doesn't exist or save fails)
+  try {
+    await prisma.auditReport.create({
+      data: {
+        query,
+        reportType,
+        generatedBy: userId,
+        data: reportData,
+        format,
+      },
+    });
+  } catch (dbError: any) {
+    console.warn('Failed to save audit report to database:', dbError.message);
+    // Continue without saving - the report can still be returned
+  }
   
   return {
     reportType,

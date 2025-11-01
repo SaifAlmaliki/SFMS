@@ -11,7 +11,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "db:seed": "tsx prisma/seed.ts",
-    "db:seed:it": "tsx prisma/seed-it-tickets.ts"
+    "db:seed:it": "tsx prisma/seed-it-tickets.ts",
+    "db:seed:test": "tsx prisma/seed-test-data.ts"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.14.1",
