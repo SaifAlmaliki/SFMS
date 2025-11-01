@@ -225,6 +225,9 @@ export async function chatAction(_prevState: any, formData: FormData) {
             matchedPolicies: result.matchedPolicies || [],
             missingJustification: result.missingJustification || false,
             parsedRequest: result.parsedRequest,
+            ticketType: result.ticketType,
+            ticketCategory: result.ticketCategory,
+            isITSupport: result.isITSupport || false,
         };
     } catch (e) {
         console.error('Chat action error:', e);

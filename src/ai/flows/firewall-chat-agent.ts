@@ -9,6 +9,8 @@ import { getVendorById, getDefaultVendor, convertToVendorFormat, validatePolicy,
 import { ExternalTicketService } from '@/lib/external-ticket-service';
 import { PolicyRequestParser } from '@/lib/policy-parser';
 import { PolicyMatcherService } from '@/lib/policy-matcher';
+import { classifyTicket, type TicketClassification } from '@/lib/ticket-classifier';
+import { searchKnowledgeBase } from '@/lib/knowledge-base-service';
 
 const prisma = new PrismaClient();
 
@@ -37,6 +39,9 @@ const FirewallChatAgentOutputSchema = z.object({
   matchedPolicies: z.array(z.any()).optional().describe('Matched existing policies'),
   missingJustification: z.boolean().optional().describe('Whether business justification is missing'),
   parsedRequest: z.any().optional().describe('Parsed policy request details'),
+  ticketType: z.string().optional().describe('Ticket type (FirewallPolicy, ITSupport, etc.)'),
+  ticketCategory: z.string().optional().describe('Ticket category'),
+  isITSupport: z.boolean().optional().describe('Whether this is an IT support request'),
 });
 
 export type FirewallChatAgentOutput = z.infer<typeof FirewallChatAgentOutputSchema>;
@@ -228,9 +233,13 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
     take: 10, // Last 10 messages for context
   });
 
-  // Check if this is a policy request or list request
-  const shouldCreatePolicy = isPolicyRequest(query);
-  const shouldListPolicies = isListPoliciesRequest(query);
+  // Classify the query to determine if it's a firewall policy request or IT support request
+  const classification = await classifyTicket(query);
+  const isITSupportRequest = classification.ticketType !== 'FirewallPolicy';
+  
+  // Check if this is a policy request or list request (only if not IT support)
+  const shouldCreatePolicy = !isITSupportRequest && isPolicyRequest(query);
+  const shouldListPolicies = !isITSupportRequest && isListPoliciesRequest(query);
   let parsedRequest: any = null;
   let duplicateFound = false;
   let matchedPolicies: any[] = [];
@@ -244,6 +253,12 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
   let externalTicketCreated = false;
   let externalTicketId: string | undefined;
   let externalTicketUrl: string | undefined;
+  
+  // For IT support requests, search knowledge base for similar tickets
+  let similarTickets: any[] = [];
+  if (isITSupportRequest) {
+    similarTickets = await searchKnowledgeBase(query, 5);
+  }
 
   // Check if user wants to list policies
   if (shouldListPolicies) {
@@ -279,14 +294,84 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
   // Get vendor configuration for enhanced context
   const vendorConfig = getVendorById(vendor) || getDefaultVendor();
   
+  // Handle IT Support requests
+  if (isITSupportRequest) {
+    // Create IT Support ticket
+    try {
+      const ticketCount = await prisma.changeTicket.count();
+      const ticketNumber = `TKT-${String(ticketCount + 1).padStart(6, '0')}`;
+      
+      const ticket = await prisma.changeTicket.create({
+        data: {
+          ticketNumber,
+          requestedBy: userId,
+          title: query.substring(0, 100),
+          description: query,
+          status: 'PendingApproval',
+          priority: classification.priority,
+          ticketType: classification.ticketType,
+          category: classification.category,
+          keywords: classification.keywords,
+          isNetworkRelated: classification.isNetworkRelated,
+        },
+      });
+      
+      ticketId = ticket.id;
+      ticketCreated = true;
+
+      // Create external ticket if external system is specified
+      if (externalSystem && (externalSystem === 'servicenow' || externalSystem === 'jira')) {
+        try {
+          const externalTicketService = new ExternalTicketService();
+          const externalResult = await externalTicketService.createExternalTicket({
+            ticketId: ticket.id,
+            system: externalSystem,
+            title: ticket.title,
+            description: ticket.description,
+            priority: ticket.priority,
+            requestedBy: userId,
+            ticketType: ticket.ticketType,
+            category: ticket.category || undefined,
+          });
+
+          if (externalResult.success) {
+            externalTicketCreated = true;
+            externalTicketId = externalResult.externalId;
+            externalTicketUrl = externalResult.externalUrl;
+          }
+        } catch (error) {
+          console.error('Failed to create external ticket:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Error creating IT support ticket:', error);
+    }
+  }
+
   // Build context for AI with vendor-specific information
-  let systemContext = `You are an expert firewall administrator assistant helping users manage ${vendorConfig.displayName} (${vendor.toUpperCase()}) firewall policies.
-You have deep knowledge of ${vendorConfig.displayName} configuration syntax, CLI commands, and best practices.
+  let systemContext = `You are an expert IT support assistant helping users with ${isITSupportRequest ? 'IT support requests' : `${vendorConfig.displayName} (${vendor.toUpperCase()}) firewall policies`}.
+${isITSupportRequest 
+  ? `You help users create IT support tickets for issues like email, VPN, software installation, hardware requests, and access requests. You can provide helpful guidance and route tickets appropriately.`
+  : `You have deep knowledge of ${vendorConfig.displayName} configuration syntax, CLI commands, and best practices.
 ${vendorConfig.id === 'fortigate' ? `FortiGate policies use CLI syntax like "config firewall policy" with fields: srcintf, dstintf, srcaddr, dstaddr, action (accept/deny), service (port numbers or service names), schedule, and logtraffic.` : ''}
 ${vendorConfig.id === 'paloalto' ? `Palo Alto policies use XML-based configuration with zones (from/to), source/destination addresses, applications, services, and actions (allow/deny).` : ''}
 ${vendorConfig.id === 'cisco' ? `Cisco ASA policies use access-list commands with permit/deny actions, protocols, source/destination addresses, and port specifications.` : ''}
-You can help create policies, answer questions about firewall configurations, and provide security recommendations.
+You can help create policies, answer questions about firewall configurations, and provide security recommendations.`
+}
 Be concise and helpful.`;
+  
+  // Add IT support context if applicable
+  if (isITSupportRequest && similarTickets.length > 0) {
+    systemContext += `\n\nIMPORTANT: This is an IT support request classified as: ${classification.category} (${classification.ticketType}).
+Priority: ${classification.priority}
+Similar previous tickets found: ${similarTickets.length}
+
+${similarTickets.map((t, i) => `${i + 1}. ${t.title} (Category: ${t.category}, Frequency: ${t.frequency})`).join('\n')}
+
+${classification.matchedKnowledgeBase?.solution ? `Suggested solution: ${classification.matchedKnowledgeBase.solution}` : ''}
+
+RESPONSE REQUIRED: Acknowledge the request and inform the user that a ticket has been created${ticketId ? ` (Ticket #${ticketId})` : ''}. ${classification.matchedKnowledgeBase?.solution ? `You may suggest: ${classification.matchedKnowledgeBase.solution}` : 'Provide helpful guidance if possible.'}${externalTicketCreated ? ` The ticket has also been created in ${externalSystem?.toUpperCase()}.` : ''}`;
+  }
 
   // Add policy list context if user requested it
   if (shouldListPolicies) {
@@ -481,6 +566,9 @@ Provide a helpful response.`,
     matchedPolicies,
     missingJustification,
     parsedRequest,
+    ticketType: classification.ticketType,
+    ticketCategory: classification.category,
+    isITSupport: isITSupportRequest,
   };
 }
 

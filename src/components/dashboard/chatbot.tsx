@@ -33,6 +33,9 @@ interface Message {
     matchedPolicies?: any[];
     missingJustification?: boolean;
     parsedRequest?: any;
+    ticketType?: string;
+    ticketCategory?: string;
+    isITSupport?: boolean;
   };
 }
 
@@ -51,6 +54,9 @@ const initialState = {
   matchedPolicies: [],
   missingJustification: false,
   parsedRequest: null,
+  ticketType: '',
+  ticketCategory: '',
+  isITSupport: false,
 };
 
 function SubmitButton() {
@@ -88,6 +94,9 @@ export function Chatbot() {
           matchedPolicies: state.matchedPolicies,
           missingJustification: state.missingJustification,
           parsedRequest: state.parsedRequest,
+          ticketType: state.ticketType,
+          ticketCategory: state.ticketCategory,
+          isITSupport: state.isITSupport,
         }
       };
       setMessages((prev) => [...prev, botMessage]);
@@ -296,9 +305,25 @@ export function Chatbot() {
                       <CardContent className="p-3">
                         <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
                           <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-500" />
-                          <span className="text-sm font-medium">Change Ticket Created</span>
+                          <span className="text-sm font-medium">
+                            {message.metadata.isITSupport ? 'IT Support Ticket Created' : 'Change Ticket Created'}
+                          </span>
                         </div>
                         <p className="text-xs text-green-600 dark:text-green-400 mt-1">Ticket ID: {message.metadata.ticketId}</p>
+                        {message.metadata.isITSupport && (
+                          <div className="flex gap-2 mt-2">
+                            {message.metadata.ticketType && (
+                              <Badge variant="outline" className="text-xs">
+                                {message.metadata.ticketType}
+                              </Badge>
+                            )}
+                            {message.metadata.ticketCategory && (
+                              <Badge variant="secondary" className="text-xs">
+                                {message.metadata.ticketCategory}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
                         {message.metadata.externalTicketCreated && (
                           <div className="flex items-center gap-2 mt-2">
                             <ExternalLink className="h-3 w-3" />

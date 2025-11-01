@@ -36,8 +36,10 @@ import { useState } from 'react';
 export function SidebarNav() {
   const pathname = usePathname();
   const isPolicyOpen = pathname.startsWith('/policies') || pathname.startsWith('/templates');
+  const isSupportOpen = pathname.startsWith('/support') || pathname.startsWith('/admin/knowledge-base');
   const [openCollapsibles, setOpenCollapsibles] = useState({
       policy: isPolicyOpen,
+      support: isSupportOpen,
   });
 
   return (
@@ -152,10 +154,56 @@ export function SidebarNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname.startsWith('/admin')} tooltip="Admin Approvals">
+            <Collapsible open={openCollapsibles.support} onOpenChange={(isOpen) => setOpenCollapsibles(prev => ({...prev, support: isOpen}))}>
+              <CollapsibleTrigger asChild>
+                <SidebarMenuButton isActive={isSupportOpen} className='justify-between w-full' tooltip='IT Support'>
+                  <div className='flex items-center gap-2'>
+                    <LifeBuoy />
+                    IT Support
+                  </div>
+                  <ChevronDown className={cn('h-4 w-4 transition-transform', openCollapsibles.support && 'rotate-180')} />
+                </SidebarMenuButton>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <SidebarMenu className='py-2 pl-7'>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={pathname === '/support'} size="sm">
+                      <Link href="/support">
+                        Support Chat
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={pathname === '/support/tickets'} size="sm">
+                      <Link href="/support/tickets">
+                        Tickets
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={pathname === '/admin/knowledge-base'} size="sm">
+                      <Link href="/admin/knowledge-base">
+                        Knowledge Base
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname.startsWith('/admin/approvals')} tooltip="Admin Approvals">
               <Link href="/admin/approvals">
                 <UserCheck />
                 Admin Approvals
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname.startsWith('/audit')} tooltip="Audit Reports">
+              <Link href="/audit/reports">
+                <ShieldCheck />
+                Audit Reports
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -184,14 +232,6 @@ export function SidebarNav() {
               <Link href="/settings">
                 <Settings />
                 Settings
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname === '/support'} tooltip="Support">
-              <Link href="/support">
-                <LifeBuoy />
-                Support
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

@@ -259,6 +259,13 @@ model ChangeTicket {
   lastSyncAt      DateTime?      // Last synchronization timestamp
   syncStatus      SyncStatus     @default(Pending)
   
+  // IT Support Ticket Extensions
+  ticketType           TicketType      @default(FirewallPolicy)
+  category             String?          // e.g., "Email ID Deletion", "VPN Setup"
+  keywords             String[]         // Array of keywords for classification
+  isNetworkRelated     Boolean          @default(false)
+  estimatedResolutionTime DateTime?      // SLA tracking
+  
   policy       Policy?          @relation(fields: [policyId], references: [id])
   comments     TicketComment[]
 }
@@ -278,6 +285,20 @@ enum TicketPriority {
   Medium
   High
   Critical
+}
+
+enum TicketType {
+  FirewallPolicy
+  ITSupport
+  NetworkAccess
+  Hardware
+  Software
+  Email
+  VPN
+  AdminAccess
+  PasswordReset
+  AccessRequest
+  Other
 }
 
 enum SyncStatus {
@@ -417,4 +438,30 @@ model AuditLog {
   details    Json?
   ipAddress  String?
   userAgent  String?
+}
+
+// Knowledge Base for IT Support Tickets
+model KnowledgeBase {
+  id            String   @id @default(cuid())
+  title         String
+  description   String   @db.Text
+  category      String
+  ticketType    String
+  keywords      String[]
+  solution      String?  @db.Text
+  commonPatterns Json?   // Store common request patterns
+  frequency     Int      @default(0) // How often this type appears
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Audit Reports
+model AuditReport {
+  id          String   @id @default(cuid())
+  query       String   @db.Text // Original user query
+  reportType  String   // "VPN Access", "Policy Changes", "User Activity", etc.
+  generatedBy String
+  data        Json     // Report data
+  format      String   // "json", "csv", "pdf"
+  createdAt   DateTime @default(now())
 }

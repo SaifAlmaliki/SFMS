@@ -127,6 +127,56 @@ export class ServiceNowApiClient {
   }
 
   /**
+   * Create an incident ticket in ServiceNow for IT support requests
+   */
+  async createIncident(ticket: Partial<ServiceNowTicket>): Promise<{ success: boolean; data?: ServiceNowTicket; error?: string }> {
+    try {
+      const incident: ServiceNowTicket = {
+        short_description: ticket.short_description || 'IT Support Request',
+        description: ticket.description || '',
+        state: '1', // New
+        priority: this.mapPriorityToServiceNow(ticket.priority || 'Medium'),
+        urgency: this.mapUrgencyToServiceNow(ticket.priority || 'Medium'),
+        impact: '3', // Low impact
+        category: ticket.category || 'IT Support',
+        subcategory: ticket.subcategory || 'General',
+        requested_by: ticket.requested_by || 'system',
+        work_notes: ticket.work_notes || 'Created by AI IT Support Agent',
+        ...ticket
+      };
+
+      const response = await fetch(`${this.baseUrl}/table/incident`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${btoa(`${this.config.username}:${this.config.password}`)}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(incident)
+      });
+
+      if (response.ok) {
+        const data: ServiceNowResponse = await response.json();
+        return {
+          success: true,
+          data: Array.isArray(data.result) ? data.result[0] : data.result
+        };
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          success: false,
+          error: errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`
+        };
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to create incident'
+      };
+    }
+  }
+
+  /**
    * Update a change request ticket
    */
   async updateChangeRequest(sysId: string, updates: Partial<ServiceNowTicket>): Promise<{ success: boolean; data?: ServiceNowTicket; error?: string }> {
@@ -329,6 +379,43 @@ export class MockServiceNowApiClient extends ServiceNowApiClient {
       subcategory: 'Firewall',
       requested_by: ticket.requested_by || 'system',
       work_notes: ticket.work_notes || 'Created by AI Firewall Agent',
+      sys_created_on: new Date().toISOString(),
+      sys_updated_on: new Date().toISOString(),
+      ...ticket
+    };
+    
+    this.mockTickets.push(newTicket);
+    
+    return {
+      success: true,
+      data: newTicket
+    };
+  }
+
+  async createIncident(ticket: Partial<ServiceNowTicket>): Promise<{ success: boolean; data?: ServiceNowTicket; error?: string }> {
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    // Simulate occasional failures (5% failure rate)
+    if (Math.random() < 0.05) {
+      return {
+        success: false,
+        error: 'ServiceNow instance unavailable'
+      };
+    }
+    
+    const newTicket: ServiceNowTicket = {
+      sys_id: `mock-${this.nextSysId++}`,
+      number: `INC${String(this.nextSysId).padStart(7, '0')}`,
+      short_description: ticket.short_description || 'IT Support Request',
+      description: ticket.description || '',
+      state: '1',
+      priority: this.mapPriorityToServiceNow(ticket.priority || 'Medium'),
+      urgency: this.mapUrgencyToServiceNow(ticket.priority || 'Medium'),
+      impact: '3',
+      category: ticket.category || 'IT Support',
+      subcategory: ticket.subcategory || 'General',
+      requested_by: ticket.requested_by || 'system',
+      work_notes: ticket.work_notes || 'Created by AI IT Support Agent',
       sys_created_on: new Date().toISOString(),
       sys_updated_on: new Date().toISOString(),
       ...ticket

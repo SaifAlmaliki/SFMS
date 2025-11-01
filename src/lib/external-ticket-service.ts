@@ -25,6 +25,8 @@ export interface CreateExternalTicketRequest {
   priority: string;
   requestedBy: string;
   policyId?: string;
+  ticketType?: string;
+  category?: string;
 }
 
 export interface SyncExternalTicketRequest {
@@ -86,9 +88,9 @@ export class ExternalTicketService {
       let result: { success: boolean; data?: any; error?: string };
 
       if (request.system === 'servicenow') {
-        result = await this.createServiceNowTicket(request);
+        result = await this.createServiceNowTicket(request, ticket);
       } else if (request.system === 'jira') {
-        result = await this.createJiraTicket(request);
+        result = await this.createJiraTicket(request, ticket);
       } else {
         return { success: false, error: 'Unsupported external system' };
       }
@@ -199,41 +201,63 @@ export class ExternalTicketService {
   }
 
   /**
-   * Create ServiceNow ticket
+   * Create ServiceNow ticket (Change Request for firewall, Incident for IT support)
    */
-  private async createServiceNowTicket(request: CreateExternalTicketRequest): Promise<{ success: boolean; data?: any; error?: string }> {
+  private async createServiceNowTicket(request: CreateExternalTicketRequest, ticket: any): Promise<{ success: boolean; data?: any; error?: string }> {
     const systemConfig = await this.getServiceNowConfig();
     if (!systemConfig) {
       return { success: false, error: 'ServiceNow not configured' };
     }
 
-    const client = new MockServiceNowApiClient(systemConfig); // Use mock for now
+    const client = new MockServiceNowApiClient(systemConfig);
     
-    return await client.createChangeRequest({
-      short_description: request.title,
-      description: request.description,
-      priority: request.priority,
-      requested_by: request.requestedBy,
-      work_notes: `Created by AI Firewall Agent for policy: ${request.policyId || 'N/A'}`
-    });
+    // Use Incident for IT support tickets, Change Request for firewall policies
+    const isITSupport = ticket.ticketType && ticket.ticketType !== 'FirewallPolicy';
+    
+    if (isITSupport) {
+      return await client.createIncident({
+        short_description: request.title,
+        description: request.description,
+        priority: request.priority,
+        requested_by: request.requestedBy,
+        category: request.category || ticket.category || 'IT Support',
+        work_notes: `Created by AI IT Support Agent. Category: ${request.category || ticket.category || 'General'}`
+      });
+    } else {
+      return await client.createChangeRequest({
+        short_description: request.title,
+        description: request.description,
+        priority: request.priority,
+        requested_by: request.requestedBy,
+        work_notes: `Created by AI Firewall Agent for policy: ${request.policyId || 'N/A'}`
+      });
+    }
   }
 
   /**
    * Create Jira ticket
    */
-  private async createJiraTicket(request: CreateExternalTicketRequest): Promise<{ success: boolean; data?: any; error?: string }> {
+  private async createJiraTicket(request: CreateExternalTicketRequest, ticket: any): Promise<{ success: boolean; data?: any; error?: string }> {
     const systemConfig = await this.getJiraConfig();
     if (!systemConfig) {
       return { success: false, error: 'Jira not configured' };
     }
 
-    const client = new MockJiraApiClient(systemConfig); // Use mock for now
+    const client = new MockJiraApiClient(systemConfig);
+    
+    // Determine issue type and labels based on ticket type
+    const isITSupport = ticket.ticketType && ticket.ticketType !== 'FirewallPolicy';
+    const issueType = isITSupport ? 'Task' : 'Task';
+    const labels = isITSupport
+      ? ['it-support', 'ai-generated', request.ticketType?.toLowerCase() || 'support'].filter(Boolean)
+      : ['firewall', 'ai-generated', 'policy-change'];
     
     return await client.createIssue({
       summary: request.title,
       description: request.description,
       priority: { name: request.priority },
-      labels: ['firewall', 'ai-generated', 'policy-change']
+      labels,
+      issuetype: { name: issueType },
     });
   }
 

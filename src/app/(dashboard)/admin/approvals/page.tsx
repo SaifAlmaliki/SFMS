@@ -4,16 +4,31 @@ import { Button } from '@/components/ui/button';
 import { PrismaClient } from '@/generated/prisma';
 import { ApproveTicketButton } from '@/components/admin/approve-ticket-button';
 import { RejectTicketButton } from '@/components/admin/reject-ticket-button';
-import { ExternalLink, Clock, User, AlertCircle } from 'lucide-react';
+import { ExternalLink, Clock, User, AlertCircle, Filter } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import Link from 'next/link';
 
 const prisma = new PrismaClient();
 
-async function getPendingTickets() {
+async function getPendingTickets(ticketType?: string) {
   try {
+    const where: any = {
+      status: 'PendingApproval'
+    };
+    
+    // Filter by ticket type if specified
+    if (ticketType && ticketType !== 'all') {
+      where.ticketType = ticketType;
+    }
+    
     const tickets = await prisma.changeTicket.findMany({
-      where: {
-        status: 'PendingApproval'
-      },
+      where,
       include: {
         policy: true,
         comments: {
@@ -33,17 +48,57 @@ async function getPendingTickets() {
   }
 }
 
-export default async function AdminApprovalsPage() {
-  const pendingTickets = await getPendingTickets();
+export default async function AdminApprovalsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const ticketTypeFilter = typeof params.type === 'string' ? params.type : 'all';
+  const pendingTickets = await getPendingTickets(ticketTypeFilter === 'all' ? undefined : ticketTypeFilter);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Admin Approvals</h1>
         <p className="text-muted-foreground">
-          Review and approve pending firewall policy change requests.
+          Review and approve pending firewall policy change requests and IT support tickets.
         </p>
       </div>
+
+      {/* Filter */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Filter by Ticket Type
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2">
+            <Select defaultValue={ticketTypeFilter}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="FirewallPolicy">Firewall Policy</SelectItem>
+                <SelectItem value="ITSupport">IT Support</SelectItem>
+                <SelectItem value="Email">Email</SelectItem>
+                <SelectItem value="VPN">VPN</SelectItem>
+                <SelectItem value="Hardware">Hardware</SelectItem>
+                <SelectItem value="Software">Software</SelectItem>
+                <SelectItem value="AdminAccess">Admin Access</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button asChild>
+              <Link href={ticketTypeFilter === 'all' ? '/admin/approvals' : `/admin/approvals?type=${ticketTypeFilter}`}>
+                Apply Filter
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {pendingTickets.length === 0 ? (
         <Card>
@@ -94,7 +149,7 @@ export default async function AdminApprovalsPage() {
                   <p className="text-sm text-muted-foreground">{ticket.description}</p>
                 </div>
 
-                {ticket.policy && (
+                {ticket.ticketType === 'FirewallPolicy' && ticket.policy && (
                   <div className="bg-muted/50 p-4 rounded-lg">
                     <h4 className="font-medium mb-2">Policy Details</h4>
                     <div className="grid grid-cols-2 gap-4 text-sm">
@@ -130,6 +185,43 @@ export default async function AdminApprovalsPage() {
                         <pre className="text-xs bg-background p-3 rounded border overflow-x-auto">
                           {ticket.policy.cliConfig}
                         </pre>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {ticket.ticketType && ticket.ticketType !== 'FirewallPolicy' && (
+                  <div className="bg-muted/50 p-4 rounded-lg">
+                    <h4 className="font-medium mb-2">IT Support Ticket Details</h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Type:</span>
+                        <Badge variant="outline" className="ml-2">
+                          {ticket.ticketType}
+                        </Badge>
+                      </div>
+                      {ticket.category && (
+                        <div>
+                          <span className="text-muted-foreground">Category:</span>
+                          <span className="ml-2">{ticket.category}</span>
+                        </div>
+                      )}
+                      {ticket.isNetworkRelated && (
+                        <div className="col-span-2">
+                          <Badge variant="secondary">Network Related</Badge>
+                        </div>
+                      )}
+                    </div>
+                    {ticket.keywords && ticket.keywords.length > 0 && (
+                      <div className="mt-3">
+                        <span className="text-muted-foreground text-sm">Keywords: </span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {ticket.keywords.slice(0, 5).map((kw, idx) => (
+                            <Badge key={idx} variant="outline" className="text-xs">
+                              {kw}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>

@@ -9,7 +9,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed:it": "tsx prisma/seed-it-tickets.ts"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.14.1",
