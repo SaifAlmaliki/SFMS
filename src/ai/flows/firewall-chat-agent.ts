@@ -5,7 +5,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { PrismaClient } from '../../generated/prisma';
-import { FORTIGATE_VENDOR, convertToVendorFormat, validatePolicy } from '@/lib/firewall-vendors';
+import { getVendorById, getDefaultVendor, convertToVendorFormat, validatePolicy, AVAILABLE_VENDORS, type FirewallVendor } from '@/lib/firewall-vendors';
 import { ExternalTicketService } from '@/lib/external-ticket-service';
 import { PolicyRequestParser } from '@/lib/policy-parser';
 import { PolicyMatcherService } from '@/lib/policy-matcher';
@@ -66,6 +66,63 @@ function isPolicyRequest(query: string): boolean {
   
   const lowerQuery = query.toLowerCase();
   return policyKeywords.some(keyword => lowerQuery.includes(keyword));
+}
+
+/**
+ * Check if user query is requesting to list/view policies
+ */
+function isListPoliciesRequest(query: string): boolean {
+  const listKeywords = [
+    'list policies',
+    'show policies',
+    'view policies',
+    'get policies',
+    'what policies',
+    'all policies',
+    'existing policies',
+    'current policies',
+    'list all policies',
+    'show all policies',
+    'what are the policies',
+    'display policies',
+    'policies list'
+  ];
+  
+  const lowerQuery = query.toLowerCase();
+  return listKeywords.some(keyword => lowerQuery.includes(keyword));
+}
+
+/**
+ * Format policies for display
+ */
+function formatPoliciesList(policies: any[]): string {
+  if (policies.length === 0) {
+    return 'No policies found in the database.';
+  }
+
+  let formatted = `Found ${policies.length} policy(ies) in the database:\n\n`;
+  
+  policies.forEach((policy, index) => {
+    formatted += `${index + 1}. Policy ID: ${policy.id}\n`;
+    formatted += `   Name: ${policy.name}\n`;
+    formatted += `   Source: ${policy.source}\n`;
+    formatted += `   Destination: ${policy.destination}:${policy.destPort || 'N/A'}\n`;
+    formatted += `   Action: ${policy.action}\n`;
+    formatted += `   Status: ${policy.status}\n`;
+    if (policy.vendor) {
+      formatted += `   Vendor: ${policy.vendor}\n`;
+    }
+    if (policy.requestedBy) {
+      formatted += `   Requested By: ${policy.requestedBy}\n`;
+    }
+    if (policy.businessJustification) {
+      formatted += `   Business Justification: ${policy.businessJustification}\n`;
+    }
+    formatted += `   Created: ${new Date(policy.createdAt).toLocaleDateString()}\n`;
+    formatted += `\n`;
+  });
+
+  return formatted;
 }
 
 /**
@@ -135,12 +192,14 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
     take: 10, // Last 10 messages for context
   });
 
-  // Check if this is a policy request
+  // Check if this is a policy request or list request
   const shouldCreatePolicy = isPolicyRequest(query);
+  const shouldListPolicies = isListPoliciesRequest(query);
   let parsedRequest: any = null;
   let duplicateFound = false;
   let matchedPolicies: any[] = [];
   let missingJustification = false;
+  let policiesList: any[] = [];
   
   let ticketId: string | undefined;
   let ticketCreated = false;
@@ -149,6 +208,19 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
   let externalTicketCreated = false;
   let externalTicketId: string | undefined;
   let externalTicketUrl: string | undefined;
+
+  // Check if user wants to list policies
+  if (shouldListPolicies) {
+    try {
+      policiesList = await prisma.policy.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 50, // Limit to 50 most recent policies
+      });
+    } catch (error) {
+      console.error('Error fetching policies:', error);
+      policiesList = [];
+    }
+  }
 
   // Parse policy request if needed
   if (shouldCreatePolicy) {
@@ -168,23 +240,45 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
     }
   }
 
+  // Get vendor configuration for enhanced context
+  const vendorConfig = getVendorById(vendor) || getDefaultVendor();
+  
   // Build context for AI with vendor-specific information
-  let systemContext = `You are an expert firewall administrator assistant helping users manage ${vendor.toUpperCase()} firewall policies.
+  let systemContext = `You are an expert firewall administrator assistant helping users manage ${vendorConfig.displayName} (${vendor.toUpperCase()}) firewall policies.
+You have deep knowledge of ${vendorConfig.displayName} configuration syntax, CLI commands, and best practices.
+${vendorConfig.id === 'fortigate' ? `FortiGate policies use CLI syntax like "config firewall policy" with fields: srcintf, dstintf, srcaddr, dstaddr, action (accept/deny), service (port numbers or service names), schedule, and logtraffic.` : ''}
+${vendorConfig.id === 'paloalto' ? `Palo Alto policies use XML-based configuration with zones (from/to), source/destination addresses, applications, services, and actions (allow/deny).` : ''}
+${vendorConfig.id === 'cisco' ? `Cisco ASA policies use access-list commands with permit/deny actions, protocols, source/destination addresses, and port specifications.` : ''}
 You can help create policies, answer questions about firewall configurations, and provide security recommendations.
 Be concise and helpful.`;
-        
-  if (shouldCreatePolicy && parsedRequest) {
-    if (duplicateFound) {
-      systemContext += `\n\nIMPORTANT: The user wants to create a ${vendor.toUpperCase()} firewall policy, but DUPLICATE POLICIES WERE FOUND:
-- Source: ${parsedRequest.sourceIp}
-- Destination: ${parsedRequest.destinationIp || parsedRequest.destinationFqdn || parsedRequest.destinationUrl}
-- Port: ${parsedRequest.port}
-- Business Justification: ${parsedRequest.businessJustification || 'NOT PROVIDED'}
 
-EXISTING POLICIES FOUND:
-${matchedPolicies.map(p => `- Policy ${p.id}: ${p.source} → ${p.destination}:${p.destPort} (${p.status}) - Created by ${p.requestedBy} - Business Justification: ${p.businessJustification || 'N/A'}`).join('\n')}
+  // Add policy list context if user requested it
+  if (shouldListPolicies) {
+    if (policiesList.length > 0) {
+      systemContext += `\n\nIMPORTANT: The user is asking to view/list existing policies. Here are the policies from the database:\n\n${formatPoliciesList(policiesList)}\n\nRESPONSE REQUIRED: Provide a helpful summary of the policies. You can mention the total count, highlight key policies, or organize them by status if helpful. Keep your response informative but concise.`;
+    } else {
+      systemContext += `\n\nIMPORTANT: The user is asking to view existing policies, but no policies were found in the database.\n\nRESPONSE REQUIRED: Inform the user that no policies are currently in the database and offer to help create one.`;
+    }
+  } else if (shouldCreatePolicy && parsedRequest) {
+    if (duplicateFound && matchedPolicies && matchedPolicies.length > 0) {
+      const firstPolicy = matchedPolicies[0];
+      systemContext += `\n\nIMPORTANT: The user wants to create a ${vendor.toUpperCase()} firewall policy, but a DUPLICATE POLICY WAS FOUND.
 
-RESPONSE REQUIRED: Inform the user about the existing policies, show the policy details, and ask if they want to proceed anyway. DO NOT create a new policy.`;
+EXISTING POLICY:
+- Policy ID: ${firstPolicy.id}
+- Source: ${firstPolicy.source}
+- Destination: ${firstPolicy.destination}:${firstPolicy.destPort}
+- Status: ${firstPolicy.status}
+- Created by: ${firstPolicy.requestedBy || 'Unknown'}
+- Business Justification: ${firstPolicy.businessJustification || 'N/A'}
+
+${matchedPolicies.length > 1 ? `Note: ${matchedPolicies.length} total matching policies found.` : ''}
+
+RESPONSE REQUIRED: Give a brief, concise response informing the user that a similar policy already exists. Mention the policy ID (${firstPolicy.id}) and ask if they still wish to proceed. DO NOT repeat all the policy details in your response - those will be shown in a card below. Keep your response to 1-2 sentences maximum.`;
+    } else if (duplicateFound) {
+      systemContext += `\n\nIMPORTANT: The user wants to create a ${vendor.toUpperCase()} firewall policy, but DUPLICATE POLICIES WERE FOUND.
+
+RESPONSE REQUIRED: Inform the user that a similar policy already exists and ask if they still wish to proceed. Keep your response concise (1-2 sentences).`;
     } else if (missingJustification) {
       systemContext += `\n\nIMPORTANT: The user wants to create a ${vendor.toUpperCase()} firewall policy, but BUSINESS JUSTIFICATION IS MISSING:
 - Source: ${parsedRequest.sourceIp}
@@ -199,7 +293,7 @@ RESPONSE REQUIRED: Warn the user that business justification is missing and may 
 - Port: ${parsedRequest.port}
 - Business Justification: ${parsedRequest.businessJustification}
 
-RESPONSE REQUIRED: Confirm the policy details and inform them that a change ticket will be created for admin approval.`;
+RESPONSE REQUIRED: Confirm the policy details for ${vendorConfig.displayName}. Inform them that a ${vendorConfig.displayName}-specific CLI configuration will be generated and a change ticket will be created for admin approval. Mention that the policy will be formatted according to ${vendorConfig.displayName} syntax and standards.`;
     }
   }
 
@@ -237,17 +331,20 @@ Provide a helpful response.`,
   // If this is a policy request and no duplicates found, create a ticket and draft policy
   if (shouldCreatePolicy && parsedRequest && !duplicateFound) {
     try {
+      // Get the selected vendor configuration
+      const selectedVendorConfig = getVendorById(vendor) || getDefaultVendor();
+      
       // Convert to vendor-specific format
-      const vendorPolicy = convertToVendorFormat(parsedRequest, FORTIGATE_VENDOR);
+      const vendorPolicy = convertToVendorFormat(parsedRequest, selectedVendorConfig);
       
       // Validate the policy
-      const validation = validatePolicy(vendorPolicy, FORTIGATE_VENDOR);
+      const validation = validatePolicy(vendorPolicy, selectedVendorConfig);
       if (!validation.valid) {
         console.error('Policy validation failed:', validation.errors);
       }
       
-      // Generate CLI configuration for FortiGate
-      cliConfig = generateFortiGateCLI(vendorPolicy);
+      // Generate CLI configuration for the selected vendor
+      cliConfig = generateVendorCLI(vendorPolicy, selectedVendorConfig);
       
       // Create draft policy
       const policyCount = await prisma.policy.count();
@@ -352,22 +449,68 @@ Provide a helpful response.`,
 }
 
 /**
+ * Generate vendor-specific CLI configuration from policy
+ */
+function generateVendorCLI(policy: any, vendor: FirewallVendor): string {
+  switch (vendor.id) {
+    case 'fortigate':
+      return generateFortiGateCLI(policy);
+    case 'paloalto':
+      return generatePaloAltoCLI(policy);
+    case 'cisco':
+      return generateCiscoASACLI(policy);
+    default:
+      return generateFortiGateCLI(policy); // Default fallback
+  }
+}
+
+/**
  * Generate FortiGate CLI configuration from policy
  */
 function generateFortiGateCLI(policy: any): string {
+  // Handle port-specific service
+  let service = policy.service || 'ALL';
+  if (policy.destPort && policy.service === 'ALL') {
+    service = `port-${policy.destPort}`;
+  }
+  
   return `config firewall policy
   edit 0
-    set name "${policy.name}"
-    set srcintf "${policy.srcintf}"
-    set dstintf "${policy.dstintf}"
-    set srcaddr "${policy.srcaddr}"
-    set dstaddr "${policy.dstaddr}"
-    set action ${policy.action}
-    set schedule "${policy.schedule}"
-    set service "${policy.service}"
-    set logtraffic ${policy.logtraffic}
+    set name "${policy.name || 'Policy'}"
+    set srcintf "${policy.srcintf || 'any'}"
+    set dstintf "${policy.dstintf || 'any'}"
+    set srcaddr "${policy.srcaddr || 'all'}"
+    set dstaddr "${policy.dstaddr || 'all'}"
+    set action ${policy.action || 'accept'}
+    set schedule "${policy.schedule || 'always'}"
+    set service "${service}"
+    set logtraffic ${policy.logtraffic || 'all'}
     ${policy.comments ? `set comments "${policy.comments}"` : ''}
   next
 end`;
+}
+
+/**
+ * Generate Palo Alto CLI configuration from policy
+ */
+function generatePaloAltoCLI(policy: any): string {
+  return `<entry name="${policy.name || 'Policy'}">
+  <from>${policy.from || 'any'}</from>
+  <to>${policy.to || 'any'}</to>
+  <source>${policy.source || 'any'}</source>
+  <destination>${policy.destination || 'any'}</destination>
+  <application>${policy.application || 'any'}</application>
+  <service>${policy.service || 'application-default'}</service>
+  <action>${policy.action || 'allow'}</action>
+</entry>`;
+}
+
+/**
+ * Generate Cisco ASA CLI configuration from policy
+ */
+function generateCiscoASACLI(policy: any): string {
+  const protocol = policy.protocol || 'tcp';
+  const port = policy.destPort ? `eq ${policy.destPort}` : '';
+  return `access-list ${policy['access-list'] || 'OUTSIDE_IN'} ${policy.action || 'permit'} ${protocol} ${policy.source || 'any'} ${policy.destination || 'any'} ${port}`.trim();
 }
 

@@ -157,10 +157,68 @@ export function SimpleChatbot() {
       <ScrollArea className="flex-1" ref={scrollAreaRef}>
         <div className="p-4 space-y-4">
         {messages.length === 0 && (
-            <div className="flex flex-col h-[280px] items-center justify-center text-center text-muted-foreground">
-              <Bot className="h-12 w-12 mb-2" />
-              <p>Ask me anything about your firewall configuration.</p>
-              <p className="text-xs mt-2">Try: "Allow 10.1.1.5 to 192.168.1.10:443 for database access"</p>
+            <div className="flex flex-col h-[280px] items-center justify-center text-center text-muted-foreground px-4">
+              <Bot className="h-12 w-12 mb-4" />
+              <p className="font-medium mb-4">Ask me anything about your firewall configuration.</p>
+              
+              <div className="w-full max-w-md space-y-3">
+                <div className="text-left">
+                  <p className="text-xs font-semibold mb-2 text-foreground">Example queries:</p>
+                  
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => {
+                        const exampleQuery = "Allow 10.1.1.5 to 192.168.1.10:443 for database access";
+                        const formData = new FormData();
+                        formData.set('query', exampleQuery);
+                        formData.set('vendor', selectedVendor);
+                        formData.set('externalSystem', selectedExternalSystem);
+                        formData.set('conversationId', conversationId);
+                        formData.set('userId', 'user-001');
+                        setMessages((prev) => [...prev, { sender: 'user', text: exampleQuery }]);
+                        formAction(formData);
+                      }}
+                      className="block w-full text-left px-3 py-2 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors"
+                    >
+                      💡 "Allow 10.1.1.5 to 192.168.1.10:443 for database access"
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        const exampleQuery = "What are the existing policies?";
+                        const formData = new FormData();
+                        formData.set('query', exampleQuery);
+                        formData.set('vendor', selectedVendor);
+                        formData.set('externalSystem', selectedExternalSystem);
+                        formData.set('conversationId', conversationId);
+                        formData.set('userId', 'user-001');
+                        setMessages((prev) => [...prev, { sender: 'user', text: exampleQuery }]);
+                        formAction(formData);
+                      }}
+                      className="block w-full text-left px-3 py-2 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors"
+                    >
+                      📋 "What are the existing policies?"
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        const exampleQuery = "List all configured policies";
+                        const formData = new FormData();
+                        formData.set('query', exampleQuery);
+                        formData.set('vendor', selectedVendor);
+                        formData.set('externalSystem', selectedExternalSystem);
+                        formData.set('conversationId', conversationId);
+                        formData.set('userId', 'user-001');
+                        setMessages((prev) => [...prev, { sender: 'user', text: exampleQuery }]);
+                        formAction(formData);
+                      }}
+                      className="block w-full text-left px-3 py-2 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors"
+                    >
+                      📊 "List all configured policies"
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
           {messages.map((message, index) => (
@@ -281,11 +339,54 @@ export function SimpleChatbot() {
           
         </div>
       </ScrollArea>
-      <div className="p-4 border-t bg-background">
+      <div className="p-4 border-t bg-background space-y-3">
+        {/* Hint Buttons */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const input = formRef.current?.querySelector('input[name="query"]') as HTMLInputElement;
+              if (input) {
+                input.value = "Allow 10.1.1.5 to 192.168.1.10:443 for database access";
+                input.focus();
+              }
+            }}
+            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors"
+          >
+            💡 Create Policy
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const input = formRef.current?.querySelector('input[name="query"]') as HTMLInputElement;
+              if (input) {
+                input.value = "What are the existing policies?";
+                input.focus();
+              }
+            }}
+            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors"
+          >
+            📋 List Policies
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const input = formRef.current?.querySelector('input[name="query"]') as HTMLInputElement;
+              if (input) {
+                input.value = "List all configured policies";
+                input.focus();
+              }
+            }}
+            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors"
+          >
+            📊 All Policies
+          </button>
+        </div>
+        
         <form ref={formRef} action={handleFormSubmit} className="flex gap-2">
           <Input
             name="query"
-            placeholder="Type a message..."
+            placeholder='Try: "Allow 10.1.1.5 to 192.168.1.10:443" or "List all policies"...'
             autoComplete="off"
             className="bg-card"
           />

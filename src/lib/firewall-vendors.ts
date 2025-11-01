@@ -36,6 +36,7 @@ export interface FortiGatePolicy {
   service: string;
   logtraffic: 'all' | 'utm' | 'disable';
   comments?: string;
+  destPort?: number;   // Destination port for service mapping
 }
 
 // FortiGate Configuration
@@ -194,17 +195,26 @@ export function convertToVendorFormat(genericPolicy: any, vendor: FirewallVendor
 
 // Convert to FortiGate format
 function convertToFortiGate(genericPolicy: any): FortiGatePolicy {
+  // Map port to FortiGate service format
+  let service = 'ALL';
+  if (genericPolicy.destPort) {
+    service = `port-${genericPolicy.destPort}`;
+  } else if (genericPolicy.port) {
+    service = `port-${genericPolicy.port}`;
+  }
+  
   return {
     name: genericPolicy.name || `Policy-${Date.now()}`,
-    srcintf: mapToFortiGateInterface(genericPolicy.source),
-    dstintf: mapToFortiGateInterface(genericPolicy.destination),
-    srcaddr: mapToFortiGateAddress(genericPolicy.source),
-    dstaddr: mapToFortiGateAddress(genericPolicy.destination),
+    srcintf: mapToFortiGateInterface(genericPolicy.source || genericPolicy.sourceIp),
+    dstintf: mapToFortiGateInterface(genericPolicy.destination || genericPolicy.destinationIp),
+    srcaddr: mapToFortiGateAddress(genericPolicy.source || genericPolicy.sourceIp),
+    dstaddr: mapToFortiGateAddress(genericPolicy.destination || genericPolicy.destinationIp || genericPolicy.destinationFqdn),
     action: genericPolicy.action === 'Allow' ? 'accept' : 'deny',
     schedule: 'always',
-    service: 'ALL',
+    service: service,
     logtraffic: 'all',
-    comments: genericPolicy.description
+    comments: genericPolicy.businessJustification || genericPolicy.description,
+    destPort: genericPolicy.destPort || genericPolicy.port
   };
 }
 
