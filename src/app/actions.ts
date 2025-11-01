@@ -498,15 +498,38 @@ export async function approveTicketAction(ticketId: string, comment?: string) {
 
     // If ticket has a policy, trigger deployment
     if (ticket.policy) {
-      await inngest.send({
-        name: 'firewall/policy.deploy',
-        data: {
-          policyId: ticket.policyId!,
-          ticketId: ticketId,
-          deployedBy: 'admin@company.com',
-          targetDevice: ticket.policy.targetDevice || 'FW-Primary-DC1',
-        },
-      });
+      // Check if Inngest is configured
+      if (!process.env.INNGEST_EVENT_KEY) {
+        console.warn('INNGEST_EVENT_KEY not configured. Skipping policy deployment via Inngest.');
+        console.warn('Please set INNGEST_EVENT_KEY in your .env file. See docs/INNGEST_SETUP.md for instructions.');
+        // Ticket is still approved, but deployment won't be triggered
+        return { 
+          success: true, 
+          warning: 'Ticket approved, but policy deployment skipped due to missing Inngest configuration. See docs/INNGEST_SETUP.md for setup instructions.' 
+        };
+      }
+
+      try {
+        await inngest.send({
+          name: 'firewall/policy.deploy',
+          data: {
+            policyId: ticket.policyId!,
+            ticketId: ticketId,
+            deployedBy: 'admin@company.com',
+            targetDevice: ticket.policy.targetDevice || 'FW-Primary-DC1',
+          },
+        });
+      } catch (inngestError) {
+        // Log the error but don't fail the approval
+        console.error('Failed to send deployment event to Inngest:', inngestError);
+        if (inngestError instanceof Error && inngestError.message.includes('Event key not found')) {
+          return { 
+            success: true, 
+            warning: 'Ticket approved, but Inngest event key is invalid. Please check your INNGEST_EVENT_KEY in .env file. See docs/INNGEST_SETUP.md for setup instructions.' 
+          };
+        }
+        throw inngestError; // Re-throw if it's a different error
+      }
     }
 
     return { success: true };

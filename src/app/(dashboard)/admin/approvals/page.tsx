@@ -162,3 +162,4 @@ export default async function AdminApprovalsPage() {
     </div>
   );
 }
+
