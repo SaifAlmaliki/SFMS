@@ -48,29 +48,37 @@ export type FirewallChatAgentOutput = z.infer<typeof FirewallChatAgentOutputSche
 
 /**
  * Check if user query is requesting a policy creation
+ * Only returns true if there's actual policy data (source IP, destination, port) OR explicit creation keywords
  */
 function isPolicyRequest(query: string): boolean {
-  const policyKeywords = [
+  const lowerQuery = query.toLowerCase();
+  
+  // Explicit policy creation keywords (these require actual policy data)
+  const explicitKeywords = [
     'create policy',
     'add policy',
     'new policy',
     'allow traffic',
     'block traffic',
-    'firewall rule',
-    'policy from',
-    'policy to',
-    'allow',
-    'deny',
-    'block',
-    'permit',
-    'from',
-    'to',
-    'port',
-    'protocol'
+    'firewall rule'
   ];
   
-  const lowerQuery = query.toLowerCase();
-  return policyKeywords.some(keyword => lowerQuery.includes(keyword));
+  // Check for explicit keywords first
+  const hasExplicitKeyword = explicitKeywords.some(keyword => lowerQuery.includes(keyword));
+  
+  // Try to parse to see if there's actual policy data
+  const parseResult = PolicyRequestParser.parse(query);
+  
+  // Only return true if:
+  // 1. Has explicit keyword AND parsing succeeds (has actual data), OR
+  // 2. Parsing succeeds without explicit keyword (user provided policy details directly)
+  if (parseResult.success) {
+    return true; // Has actual policy data (source IP, destination, port)
+  }
+  
+  // If explicit keyword but no actual data, still consider it a policy request intent
+  // but the parser will fail later and prevent policy creation
+  return hasExplicitKeyword;
 }
 
 /**
@@ -83,6 +91,7 @@ function isListPoliciesRequest(query: string): boolean {
     'view policies',
     'get policies',
     'what policies',
+    'what are',
     'all policies',
     'existing policies',
     'current policies',
@@ -90,10 +99,20 @@ function isListPoliciesRequest(query: string): boolean {
     'show all policies',
     'what are the policies',
     'display policies',
-    'policies list'
+    'policies list',
+    'show me policies',
+    'tell me about policies'
   ];
   
   const lowerQuery = query.toLowerCase();
+  // Check if query contains both "what" or "list"/"show"/"view" AND "policies"
+  if (lowerQuery.includes('policies') || lowerQuery.includes('policy')) {
+    const listVerbs = ['list', 'show', 'view', 'get', 'what', 'display', 'tell me', 'existing', 'current', 'all'];
+    if (listVerbs.some(verb => lowerQuery.includes(verb))) {
+      return true;
+    }
+  }
+  // Also check for exact keyword matches
   return listKeywords.some(keyword => lowerQuery.includes(keyword));
 }
 
@@ -233,18 +252,91 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
     take: 10, // Last 10 messages for context
   });
 
-  // Classify the query to determine if it's a firewall policy request or IT support request
-  const classification = await classifyTicket(query);
-  const isITSupportRequest = classification.ticketType !== 'FirewallPolicy';
+  // Check for list requests FIRST - these should always be treated as FirewallPolicy requests
+  // This prevents them from being misclassified as IT support
+  const shouldListPolicies = isListPoliciesRequest(query);
   
-  // Check if this is a policy request or list request (only if not IT support)
-  const shouldCreatePolicy = !isITSupportRequest && isPolicyRequest(query);
-  const shouldListPolicies = !isITSupportRequest && isListPoliciesRequest(query);
+  // Check if this might be a policy request BEFORE classification
+  // This ensures policy requests are detected even if classifier thinks it's IT support
+  const mightBePolicyRequest = !shouldListPolicies && isPolicyRequest(query);
+  
   let parsedRequest: any = null;
   let duplicateFound = false;
   let matchedPolicies: any[] = [];
   let missingJustification = false;
   let policiesList: any[] = [];
+  
+  // Try to parse the policy request if it looks like one
+  // This happens BEFORE classification to ensure we catch policy requests
+  let shouldCreatePolicy = false;
+  let hasValidPolicyData = false;
+  let parseError: string | undefined = undefined;
+  
+  if (mightBePolicyRequest) {
+    const parseResult = PolicyRequestParser.parse(query);
+    if (parseResult.success && parseResult.data) {
+      // Additional validation: Ensure all critical fields are valid
+      const data = parseResult.data;
+      
+      // Validate source IP
+      if (!PolicyRequestParser.isValidIp(data.sourceIp)) {
+        parseError = `Invalid source IP address: "${data.sourceIp}". Please provide a valid IP address (e.g., 10.1.1.5).`;
+      }
+      // Validate destination
+      else if (data.destinationIp && !PolicyRequestParser.isValidIp(data.destinationIp)) {
+        parseError = `Invalid destination IP address: "${data.destinationIp}". Please provide a valid IP address (e.g., 192.168.1.10).`;
+      }
+      // Validate port
+      else if (!data.port || data.port < 1 || data.port > 65535) {
+        parseError = `Invalid or missing port number. Port must be between 1 and 65535 (e.g., :443, port 8080).`;
+      }
+      
+      if (!parseError) {
+        // All validations passed - this is definitely a policy request
+        hasValidPolicyData = true;
+        shouldCreatePolicy = true;
+        parsedRequest = data;
+        missingJustification = !parsedRequest.businessJustification;
+        
+        // Check for duplicates/conflicts - this should happen for ALL valid policy requests
+        // BEFORE creating any tickets or policies
+        const policyMatcher = new PolicyMatcherService();
+        const matchResult = await policyMatcher.findExactMatches(parsedRequest);
+        
+        if (matchResult.hasMatch) {
+          duplicateFound = true;
+          matchedPolicies = matchResult.matchedPolicies;
+          // If duplicate found, don't create a new policy
+          shouldCreatePolicy = false;
+        }
+      }
+    } else {
+      // Parsing failed - capture the error
+      parseError = parseResult.error || 'Failed to parse policy request. Please provide source IP, destination, and port.';
+    }
+  }
+  
+  // Only classify ticket if it's NOT a policy request (list or create)
+  // Skip classification entirely for policy-related requests
+  let classification: any = null;
+  let isITSupportRequest = false;
+  
+  if (!shouldListPolicies && !hasValidPolicyData) {
+    // Only run classification if we don't have a policy request
+    classification = await classifyTicket(query);
+    isITSupportRequest = classification.ticketType !== 'FirewallPolicy';
+  } else {
+    // For policy requests, set classification without calling the classifier
+    classification = {
+      ticketType: 'FirewallPolicy' as const,
+      category: shouldListPolicies ? 'Policy Inquiry' : 'Firewall Policy Request',
+      priority: 'Medium' as const,
+      keywords: [],
+      isNetworkRelated: true,
+      confidence: 1.0,
+    };
+    isITSupportRequest = false;
+  }
   
   let ticketId: string | undefined;
   let ticketCreated = false;
@@ -270,24 +362,6 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
     } catch (error) {
       console.error('Error fetching policies:', error);
       policiesList = [];
-    }
-  }
-
-  // Parse policy request if needed
-  if (shouldCreatePolicy) {
-    const parseResult = PolicyRequestParser.parse(query);
-    if (parseResult.success) {
-      parsedRequest = parseResult.data;
-      missingJustification = !parsedRequest.businessJustification;
-      
-      // Check for duplicates
-      const policyMatcher = new PolicyMatcherService();
-      const matchResult = await policyMatcher.findExactMatches(parsedRequest);
-      
-      if (matchResult.hasMatch) {
-        duplicateFound = true;
-        matchedPolicies = matchResult.matchedPolicies;
-      }
     }
   }
 
@@ -380,10 +454,11 @@ RESPONSE REQUIRED: Acknowledge the request and inform the user that a ticket has
     } else {
       systemContext += `\n\nIMPORTANT: The user is asking to view existing policies, but no policies were found in the database.\n\nRESPONSE REQUIRED: Inform the user that no policies are currently in the database and offer to help create one.`;
     }
-  } else if (shouldCreatePolicy && parsedRequest) {
+  } else if (hasValidPolicyData && parsedRequest) {
+    // User has a valid policy request (parsing succeeded) - check for duplicates FIRST
     if (duplicateFound && matchedPolicies && matchedPolicies.length > 0) {
       const firstPolicy = matchedPolicies[0];
-      systemContext += `\n\nIMPORTANT: The user wants to create a ${vendor.toUpperCase()} firewall policy, but a DUPLICATE POLICY WAS FOUND.
+      systemContext += `\n\nIMPORTANT: The user wants to create a ${vendor.toUpperCase()} firewall policy, but a DUPLICATE/EXISTING POLICY WAS FOUND.
 
 EXISTING POLICY:
 - Policy ID: ${firstPolicy.id}
@@ -395,18 +470,18 @@ EXISTING POLICY:
 
 ${matchedPolicies.length > 1 ? `Note: ${matchedPolicies.length} total matching policies found.` : ''}
 
-RESPONSE REQUIRED: Give a brief, concise response informing the user that a similar policy already exists. Mention the policy ID (${firstPolicy.id}) and ask if they still wish to proceed. DO NOT repeat all the policy details in your response - those will be shown in a card below. Keep your response to 1-2 sentences maximum.`;
+RESPONSE REQUIRED: Give a clear, concise response informing the user that a similar policy already exists (Policy ID: ${firstPolicy.id}). DO NOT create a new policy or ticket. Mention that the existing policy details will be shown below. Ask if they want to proceed with the existing policy or if they need a different configuration. Keep your response to 2-3 sentences maximum.`;
     } else if (duplicateFound) {
       systemContext += `\n\nIMPORTANT: The user wants to create a ${vendor.toUpperCase()} firewall policy, but DUPLICATE POLICIES WERE FOUND.
 
-RESPONSE REQUIRED: Inform the user that a similar policy already exists and ask if they still wish to proceed. Keep your response concise (1-2 sentences).`;
+RESPONSE REQUIRED: Inform the user that a similar policy already exists and ask if they still wish to proceed. DO NOT create a new policy or ticket. Keep your response concise (1-2 sentences).`;
     } else if (missingJustification) {
       systemContext += `\n\nIMPORTANT: The user wants to create a ${vendor.toUpperCase()} firewall policy, but BUSINESS JUSTIFICATION IS MISSING:
 - Source: ${parsedRequest.sourceIp}
 - Destination: ${parsedRequest.destinationIp || parsedRequest.destinationFqdn || parsedRequest.destinationUrl}
 - Port: ${parsedRequest.port}
 
-RESPONSE REQUIRED: Warn the user that business justification is missing and may delay approval. Ask them to provide justification or proceed without it. DO NOT create a new policy yet.`;
+RESPONSE REQUIRED: Warn the user that business justification is missing and may delay approval. Ask them to provide justification or proceed without it.`;
     } else {
       systemContext += `\n\nIMPORTANT: The user wants to create a ${vendor.toUpperCase()} firewall policy:
 - Source: ${parsedRequest.sourceIp}
@@ -415,6 +490,13 @@ RESPONSE REQUIRED: Warn the user that business justification is missing and may 
 - Business Justification: ${parsedRequest.businessJustification}
 
 RESPONSE REQUIRED: Confirm the policy details for ${vendorConfig.displayName}. Inform them that a ${vendorConfig.displayName}-specific CLI configuration will be generated and a change ticket will be created for admin approval. Mention that the policy will be formatted according to ${vendorConfig.displayName} syntax and standards.`;
+    }
+  } else if (mightBePolicyRequest && !hasValidPolicyData) {
+    // User mentioned policy keywords but validation failed
+    if (parseError) {
+      systemContext += `\n\nIMPORTANT: The user wants to create a firewall policy, but VALIDATION FAILED.\n\nERROR: ${parseError}\n\nRESPONSE REQUIRED: Inform the user about the validation error. DO NOT create any policy or ticket. Clearly explain what's missing or invalid, and ask them to provide the correct information. Be helpful and specific about what needs to be corrected.`;
+    } else {
+      systemContext += `\n\nIMPORTANT: The user seems to want to create a firewall policy, but the request is missing required information.\n\nRESPONSE REQUIRED: Inform the user that to create a policy, they need to provide:\n- Source IP address (e.g., "10.1.1.5")\n- Destination (IP address, FQDN, or URL)\n- Port number (e.g., ":443", "port 8080")\n\nDO NOT create any policy or ticket. Ask them to provide the missing information so you can help create the policy.`;
     }
   }
 
@@ -637,4 +719,5 @@ function generateCiscoASACLI(policy: any): string {
   const port = policy.destPort ? `eq ${policy.destPort}` : '';
   return `access-list ${policy['access-list'] || 'OUTSIDE_IN'} ${policy.action || 'permit'} ${protocol} ${policy.source || 'any'} ${policy.destination || 'any'} ${port}`.trim();
 }
+
 

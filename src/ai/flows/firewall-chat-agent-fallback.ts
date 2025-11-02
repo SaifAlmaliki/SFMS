@@ -37,25 +37,37 @@ export interface FirewallChatAgentOutput {
 
 /**
  * Check if user query is requesting a policy creation
+ * Only returns true if there's actual policy data (source IP, destination, port) OR explicit creation keywords
  */
 function isPolicyRequest(query: string): boolean {
-  const policyKeywords = [
+  const lowerQuery = query.toLowerCase();
+  
+  // Explicit policy creation keywords (these require actual policy data)
+  const explicitKeywords = [
     'create policy',
     'add policy',
-    'allow',
-    'deny',
-    'block',
-    'permit',
-    'firewall rule',
-    'access rule',
-    'from',
-    'to',
-    'port',
-    'protocol'
+    'new policy',
+    'allow traffic',
+    'block traffic',
+    'firewall rule'
   ];
   
-  const lowerQuery = query.toLowerCase();
-  return policyKeywords.some(keyword => lowerQuery.includes(keyword));
+  // Check for explicit keywords first
+  const hasExplicitKeyword = explicitKeywords.some(keyword => lowerQuery.includes(keyword));
+  
+  // Try to parse to see if there's actual policy data
+  const parseResult = PolicyRequestParser.parse(query);
+  
+  // Only return true if:
+  // 1. Has explicit keyword AND parsing succeeds (has actual data), OR
+  // 2. Parsing succeeds without explicit keyword (user provided policy details directly)
+  if (parseResult.success) {
+    return true; // Has actual policy data (source IP, destination, port)
+  }
+  
+  // If explicit keyword but no actual data, still consider it a policy request intent
+  // but the parser will fail later and prevent policy creation
+  return hasExplicitKeyword;
 }
 
 /**
@@ -68,6 +80,7 @@ function isListPoliciesRequest(query: string): boolean {
     'view policies',
     'get policies',
     'what policies',
+    'what are',
     'all policies',
     'existing policies',
     'current policies',
@@ -75,10 +88,20 @@ function isListPoliciesRequest(query: string): boolean {
     'show all policies',
     'what are the policies',
     'display policies',
-    'policies list'
+    'policies list',
+    'show me policies',
+    'tell me about policies'
   ];
   
   const lowerQuery = query.toLowerCase();
+  // Check if query contains both "what" or "list"/"show"/"view" AND "policies"
+  if (lowerQuery.includes('policies') || lowerQuery.includes('policy')) {
+    const listVerbs = ['list', 'show', 'view', 'get', 'what', 'display', 'tell me', 'existing', 'current', 'all'];
+    if (listVerbs.some(verb => lowerQuery.includes(verb))) {
+      return true;
+    }
+  }
+  // Also check for exact keyword matches
   return listKeywords.some(keyword => lowerQuery.includes(keyword));
 }
 
@@ -296,9 +319,11 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
   let externalTicketId = '';
   let externalTicketUrl = '';
 
-  // Check if this is a policy request or list request
-  const shouldCreatePolicy = isPolicyRequest(query);
+  // Check if this is a list request
   const shouldListPolicies = isListPoliciesRequest(query);
+  
+  // Check if this might be a policy request (not a list request)
+  const mightBePolicyRequest = !shouldListPolicies && isPolicyRequest(query);
   let policiesList: any[] = [];
 
   // Check if user wants to list policies
@@ -314,14 +339,19 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
     }
   }
 
-  if (shouldCreatePolicy) {
+  // Only proceed with policy creation if we have a potential policy request AND parsing succeeds
+  // This ensures we only create policies when there's actual data (source IP, destination, port)
+  let shouldCreatePolicy = false;
+  if (mightBePolicyRequest) {
     // Parse policy request
     const parseResult = PolicyRequestParser.parse(query);
-    if (parseResult.success) {
+    if (parseResult.success && parseResult.data) {
+      // Only set shouldCreatePolicy to true if parsing succeeded with valid data
+      shouldCreatePolicy = true;
       parsedRequest = parseResult.data;
       missingJustification = !parsedRequest.businessJustification;
       
-      // Check for duplicates
+      // Check for duplicates/conflicts - this should happen for ALL valid policy requests
       const policyMatcher = new PolicyMatcherService();
       const matchResult = await policyMatcher.findExactMatches(parsedRequest);
       

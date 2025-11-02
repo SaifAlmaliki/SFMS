@@ -160,40 +160,68 @@ export class PolicyRequestParser {
 
   /**
    * Extract port number
+   * Must not extract numbers that are part of IP addresses
    */
   private static extractPort(query: string): number | null {
-    // Patterns for port extraction
+    // First, extract all IP addresses to exclude them from port matching
+    const ipPattern = /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/g;
+    const ips = query.match(ipPattern) || [];
+    
+    // Patterns for port extraction (in order of specificity)
     const patterns = [
-      /:(\d{1,5})/g,                    // :443, :8080
-      /port\s+(\d{1,5})/gi,             // port 443, port 8080
-      /(\d{1,5})\s+(?:for|to|on)/gi,    // 443 for, 8080 to
-      /(?:on|at)\s+(\d{1,5})/gi         // on 443, at 8080
+      /:(\d{1,5})\b/g,                    // :443, :8080 (must be after colon)
+      /port\s+(\d{1,5})\b/gi,             // port 443, port 8080
+      /(?:on|at)\s+port\s+(\d{1,5})\b/gi, // on port 443, at port 8080
+      /(?:on|at)\s+(\d{1,5})\b/gi,        // on 443, at 8080 (but not part of IP)
     ];
 
     for (const pattern of patterns) {
       const matches = query.matchAll(pattern);
       for (const match of matches) {
-        const port = parseInt(match[1]);
-        if (port >= 1 && port <= 65535) {
-          return port;
+        const portNum = parseInt(match[1]);
+        if (portNum >= 1 && portNum <= 65535) {
+          // Check if this number is part of an IP address
+          const matchIndex = match.index || 0;
+          const matchText = match[0];
+          
+          // Check if the matched number is within any IP address in the query
+          let isPartOfIp = false;
+          for (const ip of ips) {
+            const ipIndex = query.indexOf(ip);
+            if (ipIndex !== -1 && matchIndex >= ipIndex && matchIndex < ipIndex + ip.length) {
+              isPartOfIp = true;
+              break;
+            }
+          }
+          
+          // Also check if the number appears right before "to" and might be part of IP
+          // Skip if it's a single digit followed by " to" (likely part of IP like "x.x.x.5 to")
+          if (!isPartOfIp && matchText.match(/^\d\s+to$/i)) {
+            isPartOfIp = true;
+          }
+          
+          if (!isPartOfIp) {
+            return portNum;
+          }
         }
       }
     }
 
-    // Default ports for common protocols
-    if (query.includes('https') || query.includes('ssl')) return 443;
-    if (query.includes('http')) return 80;
-    if (query.includes('ssh')) return 22;
-    if (query.includes('ftp')) return 21;
-    if (query.includes('smtp')) return 25;
-    if (query.includes('dns')) return 53;
-    if (query.includes('pop3')) return 110;
-    if (query.includes('imap')) return 143;
-    if (query.includes('ldap')) return 389;
-    if (query.includes('mysql')) return 3306;
-    if (query.includes('postgresql') || query.includes('postgres')) return 5432;
-    if (query.includes('oracle')) return 1521;
-    if (query.includes('mssql') || query.includes('sql server')) return 1433;
+    // Default ports for common protocols (only if explicitly mentioned)
+    const lowerQuery = query.toLowerCase();
+    if (lowerQuery.includes('https') || lowerQuery.includes('ssl')) return 443;
+    if (lowerQuery.includes('http') && !lowerQuery.includes('https')) return 80;
+    if (lowerQuery.includes('ssh')) return 22;
+    if (lowerQuery.includes('ftp')) return 21;
+    if (lowerQuery.includes('smtp')) return 25;
+    if (lowerQuery.includes('dns')) return 53;
+    if (lowerQuery.includes('pop3')) return 110;
+    if (lowerQuery.includes('imap')) return 143;
+    if (lowerQuery.includes('ldap')) return 389;
+    if (lowerQuery.includes('mysql')) return 3306;
+    if (lowerQuery.includes('postgresql') || lowerQuery.includes('postgres')) return 5432;
+    if (lowerQuery.includes('oracle')) return 1521;
+    if (lowerQuery.includes('mssql') || lowerQuery.includes('sql server')) return 1433;
 
     return null;
   }
@@ -285,9 +313,9 @@ export class PolicyRequestParser {
   }
 
   /**
-   * Validate IP address
+   * Validate IP address (public method for validation)
    */
-  private static isValidIp(ip: string): boolean {
+  static isValidIp(ip: string): boolean {
     const parts = ip.split('.');
     if (parts.length !== 4) return false;
     
