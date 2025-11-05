@@ -4,7 +4,7 @@
 
 import { inngest } from '../client';
 import { generateAndStoreLogs } from '@/lib/log-simulator';
-import { PrismaClient } from '../../../src/generated/prisma';
+import { PrismaClient } from '@/generated/prisma';
 
 const prisma = new PrismaClient();
 

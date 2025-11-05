@@ -5,7 +5,7 @@
 import { inngest } from '../client';
 import { deployPolicy } from '@/lib/deployment';
 import { sendDeploymentNotification } from '@/lib/email';
-import { PrismaClient } from '../../../src/generated/prisma';
+import { PrismaClient } from '@/generated/prisma';
 
 const prisma = new PrismaClient();
 

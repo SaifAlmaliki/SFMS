@@ -3,7 +3,7 @@
  */
 
 import { inngest } from '../client';
-import { PrismaClient } from '../../../src/generated/prisma';
+import { PrismaClient } from '@/generated/prisma';
 import { sendAlertNotification } from '@/lib/email';
 
 const prisma = new PrismaClient();
