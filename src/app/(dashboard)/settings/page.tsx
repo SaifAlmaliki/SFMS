@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { UsersAndRoles } from '@/components/settings/users-and-roles';
 import { InviteUser } from '@/components/settings/invite-user';
+import { FortiGateConnection } from '@/components/fortigate/fortigate-connection';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useState } from 'react';
 
@@ -137,6 +138,18 @@ export default function SettingsPage() {
             <UsersAndRoles />
             <InviteUser />
         </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-semibold">Device Management</h2>
+          <p className="text-muted-foreground">
+            Connect and manage your FortiGate firewall devices.
+          </p>
+        </div>
+        <FortiGateConnection />
       </div>
     </div>
   );

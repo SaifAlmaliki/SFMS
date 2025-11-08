@@ -121,8 +121,15 @@ export function getDevicesSync(): Device[] {
 
 // All mocked data has been migrated to PostgreSQL database
 
-export async function getPolicies() {
-    const policies = await prisma.policy.findMany();
+export async function getPolicies(syncFromFortiGate: boolean = true) {
+    // NOTE: Sync functionality has been moved to a separate server action
+    // to prevent webpack from bundling server-only code into client components.
+    // If you need to sync policies, call the sync action separately before calling getPolicies.
+    // The syncFromFortiGate parameter is kept for backward compatibility but does nothing.
+    
+    const policies = await prisma.policy.findMany({
+      orderBy: { updatedAt: 'desc' },
+    });
     return policies.map(p => ({
         ...p,
         status: convertStatusFromPrisma(p.status)

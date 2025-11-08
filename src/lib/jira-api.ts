@@ -3,6 +3,9 @@
  * Handles ticket creation, updates, and synchronization with Jira
  */
 
+import 'server-only';
+import { serverFetch } from '@/lib/http-client';
+
 export interface JiraConfig {
   baseUrl: string;
   username: string;
@@ -72,7 +75,7 @@ export class JiraApiClient {
    */
   async testConnection(): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/myself`, {
+      const response = await serverFetch(`${this.baseUrl}/myself`, {
         method: 'GET',
         headers: {
           'Authorization': `Basic ${btoa(`${this.config.username}:${this.config.apiToken}`)}`,
@@ -118,7 +121,7 @@ export class JiraApiClient {
         ...issue
       };
 
-      const response = await fetch(`${this.baseUrl}/issue`, {
+      const response = await serverFetch(`${this.baseUrl}/issue`, {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${btoa(`${this.config.username}:${this.config.apiToken}`)}`,
@@ -156,7 +159,7 @@ export class JiraApiClient {
    */
   async updateIssue(issueKey: string, updates: Partial<JiraIssue>): Promise<{ success: boolean; data?: JiraIssue; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/issue/${issueKey}`, {
+      const response = await serverFetch(`${this.baseUrl}/issue/${issueKey}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Basic ${btoa(`${this.config.username}:${this.config.apiToken}`)}`,
@@ -194,7 +197,7 @@ export class JiraApiClient {
    */
   async getIssue(issueKey: string): Promise<{ success: boolean; data?: JiraIssue; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/issue/${issueKey}`, {
+      const response = await serverFetch(`${this.baseUrl}/issue/${issueKey}`, {
         method: 'GET',
         headers: {
           'Authorization': `Basic ${btoa(`${this.config.username}:${this.config.apiToken}`)}`,
@@ -229,7 +232,7 @@ export class JiraApiClient {
    */
   async searchIssues(jql: string, maxResults: number = 50): Promise<{ success: boolean; data?: JiraIssue[]; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/search`, {
+      const response = await serverFetch(`${this.baseUrl}/search`, {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${btoa(`${this.config.username}:${this.config.apiToken}`)}`,
@@ -269,7 +272,7 @@ export class JiraApiClient {
    */
   async addComment(issueKey: string, comment: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/issue/${issueKey}/comment`, {
+      const response = await serverFetch(`${this.baseUrl}/issue/${issueKey}/comment`, {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${btoa(`${this.config.username}:${this.config.apiToken}`)}`,
@@ -317,7 +320,7 @@ export class JiraApiClient {
    */
   async transitionIssue(issueKey: string, transitionId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/issue/${issueKey}/transitions`, {
+      const response = await serverFetch(`${this.baseUrl}/issue/${issueKey}/transitions`, {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${btoa(`${this.config.username}:${this.config.apiToken}`)}`,

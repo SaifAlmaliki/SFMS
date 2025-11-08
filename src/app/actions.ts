@@ -13,6 +13,11 @@ import { validateFirewallPolicy } from '@/ai/flows/validate-firewall-policy';
 import { simulatePolicy } from '@/ai/flows/simulate-policy';
 import { emulateAdversary } from '@/ai/flows/emulate-adversary';
 import { createIncident } from '@/ai/flows/create-incident';
+import { FortiGateClient, FortiGateDevice } from '@/lib/fortigate';
+import { PrismaClient } from '@/generated/prisma';
+import { deployPolicy, type DeploymentRequest } from '@/lib/deployment';
+
+const prisma = new PrismaClient();
 
 const policySchema = z.object({
   description: z.string().min(10, 'Please provide a more detailed description.'),
@@ -584,4 +589,343 @@ export async function rejectTicketAction(ticketId: string, reason: string) {
   }
 }
 
-     
+/**
+ * Test FortiGate connection
+ */
+const fortigateConnectionSchema = z.object({
+  hostname: z.string().min(1, 'Hostname is required'),
+  apiUsername: z.string().min(1, 'API username is required'),
+  apiKey: z.string().min(1, 'API key is required'),
+});
+
+export async function testFortiGateConnection(input: z.infer<typeof fortigateConnectionSchema>) {
+  try {
+    const validated = fortigateConnectionSchema.parse(input);
+
+    const device: FortiGateDevice = {
+      name: validated.hostname,
+      ip: validated.hostname,
+      apiKey: validated.apiKey,
+    };
+
+    const client = new FortiGateClient(device);
+    const result = await client.testConnection();
+
+    if (result.success) {
+      return {
+        success: true,
+        data: result.data,
+        serial: result.serial,
+        version: result.version,
+        build: result.build,
+      };
+    } else {
+      // Log detailed error for debugging
+      console.error('FortiGate connection failed:', {
+        error: result.error,
+        status: result.status,
+        httpStatus: result.httpStatus,
+        url: `https://${validated.hostname}/api/v2/monitor/system/status`,
+      });
+      
+      return {
+        success: false,
+        error: result.error || `Connection failed (HTTP ${result.httpStatus || result.status || 'unknown'})`,
+      };
+    }
+  } catch (e) {
+    // Log full error details
+    console.error('FortiGate connection error:', e);
+    
+    if (e instanceof z.ZodError) {
+      return {
+        success: false,
+        error: e.errors.map((err) => err.message).join(', '),
+      };
+    }
+    
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    const errorStack = e instanceof Error ? e.stack : undefined;
+    
+    console.error('Full error details:', { errorMessage, errorStack });
+    
+    return {
+      success: false,
+      error: errorMessage || 'Unknown error occurred. Check server logs for details.',
+    };
+  }
+}
+
+/**
+ * Save FortiGate device configuration
+ */
+const saveDeviceSchema = z.object({
+  name: z.string().min(1, 'Device name is required'),
+  hostname: z.string().min(1, 'Hostname is required'),
+  apiUsername: z.string().min(1, 'API username is required'),
+  apiKey: z.string().min(1, 'API key is required'),
+  serial: z.string().optional(),
+  version: z.string().optional(),
+  build: z.number().optional(),
+});
+
+export async function saveFortiGateDevice(input: z.infer<typeof saveDeviceSchema>) {
+  try {
+    const validated = saveDeviceSchema.parse(input);
+
+    // Check if device with same name or IP already exists
+    const existingDevice = await prisma.device.findFirst({
+      where: {
+        OR: [
+          { name: validated.name },
+          { ip: validated.hostname },
+        ],
+      },
+    });
+
+    if (existingDevice) {
+      // Update existing device
+      await prisma.device.update({
+        where: { id: existingDevice.id },
+        data: {
+          name: validated.name,
+          ip: validated.hostname,
+          vendor: 'fortigate',
+          apiKey: validated.apiKey,
+          version: validated.version,
+          status: 'Active',
+          lastSync: new Date(),
+        },
+      });
+
+      revalidatePath('/settings');
+      return {
+        success: true,
+        message: 'Device updated successfully',
+      };
+    } else {
+      // Create new device
+      await prisma.device.create({
+        data: {
+          name: validated.name,
+          ip: validated.hostname,
+          vendor: 'fortigate',
+          apiKey: validated.apiKey,
+          version: validated.version,
+          status: 'Active',
+          lastSync: new Date(),
+        },
+      });
+
+      revalidatePath('/settings');
+      return {
+        success: true,
+        message: 'Device saved successfully',
+      };
+    }
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return {
+        success: false,
+        error: e.errors.map((err) => err.message).join(', '),
+      };
+    }
+    console.error('Failed to save device:', e);
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'Unknown error occurred',
+    };
+  }
+}
+
+/**
+ * Deploy policy to firewall device
+ */
+export async function deployPolicyAction(request: DeploymentRequest) {
+  try {
+    const deploymentId = await deployPolicy(request);
+    return {
+      success: true,
+      deploymentId,
+    };
+  } catch (e) {
+    console.error('Failed to deploy policy:', e);
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'Unknown error occurred',
+    };
+  }
+}
+
+/**
+ * Get device health status for all connected FortiGate devices
+ */
+export async function getDeviceHealthAction() {
+  try {
+    const { PrismaClient } = await import('../generated/prisma');
+    const prisma = new PrismaClient();
+
+    // Get all active FortiGate devices
+    const devices = await prisma.device.findMany({
+      where: {
+        vendor: 'fortigate',
+        status: 'Active',
+      },
+    });
+
+    const healthData = await Promise.allSettled(
+      devices.map(async (device) => {
+        if (!device.apiKey) {
+          return {
+            name: device.name,
+            ip: device.ip,
+            status: 'Offline' as const,
+            error: 'API key not configured',
+            version: device.version || 'Unknown',
+          };
+        }
+
+        try {
+          const fortigateDevice: FortiGateDevice = {
+            id: device.id,
+            name: device.name,
+            ip: device.ip,
+            apiKey: device.apiKey,
+            version: device.version || undefined,
+          };
+
+          const client = new FortiGateClient(fortigateDevice);
+          
+          // Test connection with timeout handling
+          // Use Promise.race to add an overall timeout for the entire health check
+          const healthCheckPromise = (async () => {
+            const statusResult = await client.testConnection();
+            
+            if (statusResult.success) {
+              // Get resource usage to determine health (with shorter timeout)
+              try {
+                const resourceResult = await client.monitor.getResourceUsage();
+                
+                let healthStatus: 'Online' | 'Warning' | 'Offline' = 'Online';
+                
+                if (resourceResult.success && resourceResult.data) {
+                  // Handle different FortiGate resource usage response formats
+                  const data = resourceResult.data;
+                  let cpu = 0;
+                  let memory = 0;
+                  
+                  // Try different possible structures
+                  if (data.cpu?.usage !== undefined) {
+                    cpu = data.cpu.usage;
+                  } else if (data.cpu_usage !== undefined) {
+                    cpu = data.cpu_usage;
+                  } else if (typeof data.cpu === 'number') {
+                    cpu = data.cpu;
+                  }
+                  
+                  if (data.memory?.usage !== undefined) {
+                    memory = data.memory.usage;
+                  } else if (data.mem_usage !== undefined) {
+                    memory = data.mem_usage;
+                  } else if (typeof data.memory === 'number') {
+                    memory = data.memory;
+                  }
+                  
+                  // Determine status based on resource usage
+                  // CPU or memory > 90% = Warning
+                  if (cpu > 90 || memory > 90) {
+                    healthStatus = 'Warning';
+                  }
+                }
+                
+                return {
+                  name: device.name,
+                  ip: device.ip,
+                  status: healthStatus,
+                  version: statusResult.version || device.version || 'Unknown',
+                  serial: statusResult.serial,
+                  build: statusResult.build,
+                };
+              } catch (resourceError: any) {
+                // If resource check fails, still mark as online if connection test passed
+                return {
+                  name: device.name,
+                  ip: device.ip,
+                  status: 'Online' as const,
+                  version: statusResult.version || device.version || 'Unknown',
+                  serial: statusResult.serial,
+                  build: statusResult.build,
+                };
+              }
+            } else {
+              return {
+                name: device.name,
+                ip: device.ip,
+                status: 'Offline' as const,
+                error: statusResult.error || 'Connection failed',
+                version: device.version || 'Unknown',
+              };
+            }
+          })();
+
+          // Add overall timeout of 25 seconds for the entire health check
+          const timeoutPromise = new Promise<{
+            name: string;
+            ip: string;
+            status: 'Offline';
+            error: string;
+            version: string;
+          }>((_, reject) => {
+            setTimeout(() => reject(new Error('Health check timeout')), 25000);
+          });
+
+          return await Promise.race([healthCheckPromise, timeoutPromise]);
+        } catch (error: any) {
+          // Handle timeout and other errors
+          const errorMessage = error.message || 'Unknown error';
+          const isTimeout = errorMessage.includes('timeout') || 
+                           errorMessage.includes('Timeout') ||
+                           error.code === 'UND_ERR_CONNECT_TIMEOUT';
+          
+          return {
+            name: device.name,
+            ip: device.ip,
+            status: 'Offline' as const,
+            error: isTimeout ? 'Connection timeout - device may be unreachable' : errorMessage,
+            version: device.version || 'Unknown',
+          };
+        }
+      })
+    );
+
+    // Extract successful results and handle failures
+    const results = healthData.map((result) => {
+      if (result.status === 'fulfilled') {
+        return result.value;
+      } else {
+        // This shouldn't happen with Promise.allSettled, but handle it anyway
+        return {
+          name: 'Unknown',
+          ip: 'Unknown',
+          status: 'Offline' as const,
+          error: result.reason?.message || 'Unknown error',
+          version: 'Unknown',
+        };
+      }
+    });
+
+    return {
+      success: true,
+      devices: results,
+    };
+  } catch (e) {
+    console.error('Failed to get device health:', e);
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'Unknown error occurred',
+      devices: [],
+    };
+  }
+}
+
+      

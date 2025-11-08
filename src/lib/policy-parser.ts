@@ -131,12 +131,19 @@ export class PolicyRequestParser {
   private static extractDestination(query: string): { ip?: string; fqdn?: string; url?: string } {
     const result: { ip?: string; fqdn?: string; url?: string } = {};
 
-    // Extract IP address
-    const ipPattern = /(?:to|towards|->)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i;
-    const ipMatch = query.match(ipPattern);
-    if (ipMatch && this.isValidIp(ipMatch[1])) {
-      result.ip = ipMatch[1];
-      return result;
+    // Extract IP address - handle cases like "to access 8.8.8.8" or "to 8.8.8.8"
+    const ipPatterns = [
+      /(?:to|towards|->)\s+(?:access|connect|reach|use)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i,  // "to access 8.8.8.8"
+      /(?:to|towards|->)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i,  // "to 8.8.8.8"
+      /(?:access|connect|reach|use)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i,  // "access 8.8.8.8" (fallback)
+    ];
+    
+    for (const ipPattern of ipPatterns) {
+      const ipMatch = query.match(ipPattern);
+      if (ipMatch && this.isValidIp(ipMatch[1])) {
+        result.ip = ipMatch[1];
+        return result;
+      }
     }
 
     // Extract URL
@@ -230,16 +237,26 @@ export class PolicyRequestParser {
    * Extract business justification
    */
   private static extractBusinessJustification(query: string): string | null {
+    // Exclude common action words that shouldn't be used as justification
+    const actionWords = ['access', 'connect', 'reach', 'use', 'allow', 'block', 'deny'];
+    
     const patterns = [
-      /(?:for|because|reason|justification|purpose|need|require)\s+(.+?)(?:\s+(?:from|to|port|on|at)|$)/i,
-      /(?:to|in order to|so that)\s+(.+?)(?:\s+(?:from|to|port|on|at)|$)/i,
-      /(?:access|connect|reach|use)\s+(.+?)(?:\s+(?:from|to|port|on|at)|$)/i
+      /(?:for|because|reason|justification|purpose|need|require)\s+(.+?)(?:\s+(?:from|to|port|on|at|device)|$)/i,
+      /(?:to|in order to|so that)\s+(.+?)(?:\s+(?:from|to|port|on|at|device)|$)/i,
     ];
 
     for (const pattern of patterns) {
       const match = query.match(pattern);
       if (match && match[1].trim().length > 3) {
-        return match[1].trim();
+        const justification = match[1].trim();
+        // Don't use action words or IP addresses as justification
+        const lowerJustification = justification.toLowerCase();
+        const isActionWord = actionWords.some(word => lowerJustification.startsWith(word + ' '));
+        const isIpAddress = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(justification);
+        
+        if (!isActionWord && !isIpAddress) {
+          return justification;
+        }
       }
     }
 
@@ -265,15 +282,36 @@ export class PolicyRequestParser {
    * Extract target device
    */
   private static extractTargetDevice(query: string): string | null {
-    const patterns = [
-      /(?:on|device|firewall)\s+([a-zA-Z0-9\-_]+)/i,
+    // First, try to match "device <name>" or "firewall <name>" explicitly
+    const explicitPatterns = [
+      /(?:device|firewall)\s+([a-zA-Z0-9\-_]+)/i,
       /(?:deploy|apply)\s+(?:to|on)\s+([a-zA-Z0-9\-_]+)/i
     ];
 
-    for (const pattern of patterns) {
+    for (const pattern of explicitPatterns) {
       const match = query.match(pattern);
       if (match && match[1].length > 2) {
-        return match[1];
+        // Make sure it's not "port" or a number
+        const deviceName = match[1];
+        if (deviceName.toLowerCase() !== 'port' && !/^\d+$/.test(deviceName)) {
+          return deviceName;
+        }
+      }
+    }
+
+    // Then try "on <name>" but exclude common words that might be confused
+    const onPattern = /on\s+([a-zA-Z0-9\-_]+)/i;
+    const onMatch = query.match(onPattern);
+    if (onMatch && onMatch[1].length > 2) {
+      const deviceName = onMatch[1];
+      // Exclude common words that appear after "on"
+      const excludedWords = ['port', 'device', 'firewall', '443', '80', '22', '21', '25', '53'];
+      if (!excludedWords.includes(deviceName.toLowerCase()) && !/^\d+$/.test(deviceName)) {
+        // Make sure "on <name>" is not followed by "port" (e.g., "on port 443")
+        const afterMatch = query.substring(query.indexOf(onMatch[0]) + onMatch[0].length);
+        if (!afterMatch.trim().toLowerCase().startsWith('port')) {
+          return deviceName;
+        }
       }
     }
 

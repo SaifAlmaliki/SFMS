@@ -310,7 +310,7 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
     await prisma.chatMessage.create({
       data: {
         conversationId: convId,
-        role: 'user',
+        role: 'User',
         content: query,
       },
     });
@@ -392,8 +392,9 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
         // Get the selected vendor configuration
         const selectedVendorConfig = getVendorById(vendor) || getDefaultVendor();
         
-        // Convert to vendor-specific format
-        const vendorPolicy = convertToVendorFormat(parsedRequest, selectedVendorConfig);
+        // Convert to vendor-specific format (add action since parsedRequest doesn't have it)
+        const policyWithAction = { ...parsedRequest, action: 'Allow' };
+        const vendorPolicy = convertToVendorFormat(policyWithAction, selectedVendorConfig);
         
         // Validate the policy
         const validation = validatePolicy(vendorPolicy, selectedVendorConfig);
@@ -460,6 +461,33 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
           console.error('Error creating policy history:', historyError);
         }
 
+        // Auto-deploy to FortiGate if targetDevice is set
+        // Deploy immediately when created via AI chat
+        if (policy.targetDevice) {
+          try {
+            const { deployPolicy } = await import('@/lib/deployment');
+            await deployPolicy({
+              policyId: policy.id,
+              ticketId: ticket.id,
+              deployedBy: userId,
+              targetDevice: policy.targetDevice,
+            });
+            
+            // Update policy status to Active after successful deployment
+            await prisma.policy.update({
+              where: { id: policy.id },
+              data: { status: 'Active' },
+            });
+            
+            // Update AI response to mention deployment
+            aiResponse += `\n\n✅ Policy has been automatically deployed to ${policy.targetDevice} and is now active.`;
+          } catch (deployError: any) {
+            console.error('Error auto-deploying policy:', deployError);
+            // Don't fail the whole operation if deployment fails
+            aiResponse += `\n\n⚠️ Policy created but deployment to ${policy.targetDevice} failed: ${deployError.message}. You can deploy it manually from the policies page.`;
+          }
+        }
+
       } catch (error) {
         console.error('Error creating policy and ticket:', error);
       }
@@ -469,7 +497,7 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
     await prisma.chatMessage.create({
       data: {
         conversationId: convId,
-        role: 'assistant',
+        role: 'Assistant',
         content: aiResponse,
       },
     });

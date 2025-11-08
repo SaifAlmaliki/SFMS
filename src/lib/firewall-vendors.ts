@@ -27,13 +27,13 @@ export interface ValidationRule {
 
 export interface FortiGatePolicy {
   name: string;
-  srcintf: string;      // Source interface
-  dstintf: string;     // Destination interface
-  srcaddr: string;     // Source address
-  dstaddr: string;     // Destination address
+  srcintf: string | Array<{ name: string }>;      // Source interface (string for CLI, array for API)
+  dstintf: string | Array<{ name: string }>;      // Destination interface (string for CLI, array for API)
+  srcaddr: string | Array<{ name: string }>;     // Source address (string for CLI, array for API)
+  dstaddr: string | Array<{ name: string }>;     // Destination address (string for CLI, array for API)
   action: 'accept' | 'deny';
   schedule: string;
-  service: string;
+  service: string | Array<{ name: string }>;     // Service (string for CLI, array for API)
   logtraffic: 'all' | 'utm' | 'disable';
   comments?: string;
   destPort?: number;   // Destination port for service mapping
@@ -196,25 +196,79 @@ export function convertToVendorFormat(genericPolicy: any, vendor: FirewallVendor
 // Convert to FortiGate format
 function convertToFortiGate(genericPolicy: any): FortiGatePolicy {
   // Map port to FortiGate service format
-  let service = 'ALL';
-  if (genericPolicy.destPort) {
-    service = `port-${genericPolicy.destPort}`;
-  } else if (genericPolicy.port) {
-    service = `port-${genericPolicy.port}`;
+  let service: string | Array<{ name: string }> = 'ALL';
+  const port = genericPolicy.destPort || genericPolicy.port;
+  
+  if (port) {
+    // Check if it's a common service
+    const commonServices: Record<number, string> = {
+      80: 'HTTP',
+      443: 'HTTPS',
+      22: 'SSH',
+      21: 'FTP',
+      25: 'SMTP',
+      53: 'DNS',
+      3389: 'RDP',
+    };
+    
+    if (commonServices[port]) {
+      service = [{ name: commonServices[port] }];
+    } else {
+      service = [{ name: `port-${port}` }];
+    }
+  } else {
+    service = [{ name: 'ALL' }];
+  }
+  
+  // Interfaces (zones) - use sourceZone/destinationZone, not IP addresses
+  // FortiGate API expects arrays
+  const srcZone = mapToFortiGateInterface(genericPolicy.sourceZone || genericPolicy.source);
+  const dstZone = mapToFortiGateInterface(genericPolicy.destinationZone || genericPolicy.destination);
+  const srcintf = [{ name: srcZone }];
+  const dstintf = [{ name: dstZone }];
+  
+  // Addresses - use IP addresses or FQDNs
+  // FortiGate API expects arrays
+  // Priority: destinationIp > destinationFqdn > destinationUrl > destination (from DB)
+  // Exclude common words that shouldn't be used as destinations
+  const excludedWords = ['access', 'connect', 'reach', 'use', 'allow', 'deny'];
+  const destinationValue = genericPolicy.destinationIp 
+    || genericPolicy.destinationFqdn 
+    || genericPolicy.destinationUrl 
+    || (genericPolicy.destination && 
+        !excludedWords.includes(genericPolicy.destination.toLowerCase()) && 
+        genericPolicy.destination.trim() !== '' 
+        ? genericPolicy.destination 
+        : undefined);
+  
+  const srcAddr = mapToFortiGateAddress(genericPolicy.sourceIp || genericPolicy.source);
+  const dstAddr = mapToFortiGateAddress(destinationValue);
+  const srcaddr = [{ name: srcAddr }];
+  const dstaddr = [{ name: dstAddr }];
+  
+  // Debug logging
+  if (!genericPolicy.destinationIp && !genericPolicy.destinationFqdn && !genericPolicy.destinationUrl) {
+    console.warn('Warning: No destination IP/FQDN/URL found in policy. Generic policy:', {
+      destinationIp: genericPolicy.destinationIp,
+      destinationFqdn: genericPolicy.destinationFqdn,
+      destinationUrl: genericPolicy.destinationUrl,
+      destination: genericPolicy.destination,
+      finalDestination: destinationValue
+    });
   }
   
   return {
     name: genericPolicy.name || `Policy-${Date.now()}`,
-    srcintf: mapToFortiGateInterface(genericPolicy.source || genericPolicy.sourceIp),
-    dstintf: mapToFortiGateInterface(genericPolicy.destination || genericPolicy.destinationIp),
-    srcaddr: mapToFortiGateAddress(genericPolicy.source || genericPolicy.sourceIp),
-    dstaddr: mapToFortiGateAddress(genericPolicy.destination || genericPolicy.destinationIp || genericPolicy.destinationFqdn),
+    srcintf,
+    dstintf,
+    srcaddr,
+    dstaddr,
     action: genericPolicy.action === 'Allow' ? 'accept' : 'deny',
     schedule: 'always',
-    service: service,
+    service,
     logtraffic: 'all',
     comments: genericPolicy.businessJustification || genericPolicy.description,
-    destPort: genericPolicy.destPort || genericPolicy.port
+    destPort: port
   };
 }
 
@@ -244,7 +298,11 @@ function convertToCiscoASA(genericPolicy: any): any {
 }
 
 // Helper functions for mapping generic values to vendor-specific values
-function mapToFortiGateInterface(source: string): string {
+function mapToFortiGateInterface(source?: string): string {
+  if (!source) {
+    return 'any';
+  }
+  
   // Map common network names to FortiGate interfaces
   const interfaceMap: Record<string, string> = {
     'internal': 'internal',
@@ -256,10 +314,14 @@ function mapToFortiGateInterface(source: string): string {
   };
   
   const lowerSource = source.toLowerCase();
-  return interfaceMap[lowerSource] || 'internal';
+  return interfaceMap[lowerSource] || 'any';
 }
 
-function mapToFortiGateAddress(source: string): string {
+function mapToFortiGateAddress(source?: string): string {
+  if (!source) {
+    return 'all';
+  }
+  
   // Map common address names to FortiGate address objects
   const addressMap: Record<string, string> = {
     'internal': 'all',
