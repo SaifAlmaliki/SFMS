@@ -121,8 +121,21 @@ export function getDevicesSync(): Device[] {
 
 // All mocked data has been migrated to PostgreSQL database
 
-export async function getPolicies() {
-    const policies = await prisma.policy.findMany();
+export async function getPolicies(syncFromFortiGate: boolean = true) {
+    // If sync is enabled, sync policies from FortiGate devices first
+    if (syncFromFortiGate) {
+      try {
+        const { syncAllFortiGatePolicies } = await import('./fortigate-policy-sync');
+        await syncAllFortiGatePolicies();
+      } catch (error) {
+        console.error('Error syncing policies from FortiGate:', error);
+        // Continue with database policies even if sync fails
+      }
+    }
+    
+    const policies = await prisma.policy.findMany({
+      orderBy: { updatedAt: 'desc' },
+    });
     return policies.map(p => ({
         ...p,
         status: convertStatusFromPrisma(p.status)

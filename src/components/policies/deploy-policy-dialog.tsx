@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { getDevicesSync, type Policy } from '@/lib/data';
+import { deployPolicy } from '@/lib/deployment';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
@@ -49,37 +50,64 @@ export function DeployPolicyDialog({ policy, children, disabled }: { policy: Pol
     }
   }, [open]);
 
-  const handleDeploy = () => {
+  const handleDeploy = async () => {
     setIsDeploying(true);
+    
+    const updatedDeployments = [...deployments];
+    let successCount = 0;
+    let failCount = 0;
 
-    // Simulate incremental deployment
-    deployments.forEach((_, index) => {
-        setTimeout(() => {
-            setDeployments(prev => prev.map((d, i) => i === index ? { ...d, status: 'Syncing' } : d));
-            
-            setTimeout(() => {
-                setDeployments(prev => prev.map((d, i) => {
-                    if (i === index) {
-                        // Simulate a failure for one device
-                        const newStatus = d.name.includes('Branch-Office') ? 'Failed' : 'Synced';
-                        return { ...d, status: newStatus };
-                    }
-                    return d;
-                }));
+    // Deploy to each device sequentially
+    for (let index = 0; index < updatedDeployments.length; index++) {
+      const device = updatedDeployments[index];
+      
+      // Update status to Syncing
+      updatedDeployments[index] = { ...device, status: 'Syncing' };
+      setDeployments([...updatedDeployments]);
+      
+      try {
+        // Deploy policy to this device
+        await deployPolicy({
+          policyId: policy.id,
+          deployedBy: 'user', // TODO: Get actual user from auth
+          targetDevice: device.name,
+        });
+        
+        // Update status to Synced
+        updatedDeployments[index] = { ...device, status: 'Synced' };
+        successCount++;
+      } catch (error: any) {
+        // Update status to Failed
+        updatedDeployments[index] = { ...device, status: 'Failed' };
+        failCount++;
+        console.error(`Failed to deploy to ${device.name}:`, error);
+      }
+      
+      // Update state after each deployment
+      setDeployments([...updatedDeployments]);
+    }
 
-                // Check if all deployments are done
-                if (index === deployments.length - 1) {
-                    setIsDeploying(false);
-                    toast({
-                        title: "Deployment Finished",
-                        description: `Policy ${policy.id} deployment process has completed.`
-                    });
-                }
-
-            }, 1000 + Math.random() * 500); // Simulate sync time
-
-        }, index * 500); // Stagger the start of each deployment
-    });
+    setIsDeploying(false);
+    
+    // Show toast based on results
+    if (successCount === updatedDeployments.length) {
+      toast({
+        title: "Deployment Successful",
+        description: `Policy ${policy.id} has been deployed to all ${successCount} device(s).`
+      });
+    } else if (failCount === updatedDeployments.length) {
+      toast({
+        title: "Deployment Failed",
+        description: `Failed to deploy policy ${policy.id} to any device.`,
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: "Deployment Completed with Errors",
+        description: `Policy ${policy.id}: ${successCount} succeeded, ${failCount} failed.`,
+        variant: 'destructive',
+      });
+    }
   };
 
   return (

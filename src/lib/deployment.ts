@@ -3,8 +3,9 @@
  */
 
 import { PrismaClient } from '../generated/prisma';
-import { MockFortiGateApiClient, FortiGateDevice } from './fortigate-api';
-import { FORTIGATE_VENDOR } from './firewall-vendors';
+import { FortiGateClient, FortiGateDevice } from './fortigate';
+import { convertPolicyToFortiGate } from './fortigate-policy-converter';
+import type { Policy } from './data';
 
 const prisma = new PrismaClient();
 
@@ -19,7 +20,7 @@ export interface DeploymentRequest {
 /**
  * Deploy policy to FortiGate device using REST API
  */
-async function deployToFortiGate(deviceName: string, policy: any): Promise<{ success: boolean; message?: string; vendorId?: string }> {
+async function deployToFortiGate(deviceName: string, policy: Policy): Promise<{ success: boolean; message?: string; vendorId?: string }> {
   try {
     // Get device information from database
     const device = await prisma.device.findFirst({
@@ -53,7 +54,7 @@ async function deployToFortiGate(deviceName: string, policy: any): Promise<{ suc
       version: device.version || undefined,
     };
 
-    const apiClient = new MockFortiGateApiClient(fortigateDevice); // Use MockFortiGateApiClient for now
+    const apiClient = new FortiGateClient(fortigateDevice);
 
     // Test connection first
     const connectionTest = await apiClient.testConnection();
@@ -64,14 +65,21 @@ async function deployToFortiGate(deviceName: string, policy: any): Promise<{ suc
       };
     }
 
-    // Deploy the policy
-    const deployResult = await apiClient.createPolicy(policy.rawConfig || policy);
+    // Convert policy to FortiGate format
+    const fortigatePolicy = convertPolicyToFortiGate(policy);
+
+    // Deploy the policy using the firewall client
+    const deployResult = await apiClient.firewall.createPolicy(fortigatePolicy);
     
     if (deployResult.success) {
+      // Extract policy ID from FortiGate response
+      // FortiGate returns the policy in results, and policyid is usually in the response
+      const policyId = deployResult.data?.policyid || deployResult.data?.id || 'unknown';
+      
       return {
         success: true,
         message: 'Policy deployed successfully to FortiGate',
-        vendorId: deployResult.data?.id || 'unknown',
+        vendorId: policyId.toString(),
       };
     } else {
       return {
