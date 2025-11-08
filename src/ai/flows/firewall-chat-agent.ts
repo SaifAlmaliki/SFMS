@@ -697,7 +697,26 @@ Provide a helpful response.`,
           aiResponse += `\n\n✅ Policy has been automatically deployed to ${policy.targetDevice} and is now active.`;
         } catch (deployError: any) {
           console.error('Error auto-deploying policy:', deployError);
-          aiResponse += `\n\n⚠️ Policy created but deployment to ${policy.targetDevice} failed: ${deployError.message}. You can deploy it manually from the policies page.`;
+          let errorMessage = deployError.message;
+          
+          // If device not found, try to get available devices and suggest them
+          if (errorMessage.includes('not found')) {
+            try {
+              const devices = await prisma.device.findMany({
+                where: { vendor: 'fortigate', status: 'Active' },
+                select: { name: true },
+              });
+              
+              if (devices.length > 0) {
+                const deviceNames = devices.map(d => d.name).join(', ');
+                errorMessage += `\n\n💡 Available devices: ${deviceNames}\n\nTo use "${policy.targetDevice}", please:\n1. Go to Settings page\n2. Enter your FortiGate credentials\n3. Set Device Name to "${policy.targetDevice}"\n4. Test connection and save the device configuration.`;
+              }
+            } catch (err) {
+              // Ignore errors when fetching devices
+            }
+          }
+          
+          aiResponse += `\n\n⚠️ Policy created but deployment to ${policy.targetDevice} failed: ${errorMessage}\n\nYou can deploy it manually from the policies page once the device is configured.`;
         }
       }
 

@@ -18,6 +18,62 @@ export interface DeploymentRequest {
 }
 
 /**
+ * Ensure address object exists in FortiGate, create if needed
+ */
+async function ensureAddressObject(
+  apiClient: FortiGateClient,
+  address: string,
+  isIpAddress: boolean
+): Promise<string> {
+  // If it's not an IP address (e.g., "all", "any", or an existing address object name), use as-is
+  if (!isIpAddress || address === 'all' || address === 'any') {
+    return address;
+  }
+
+  // Generate a safe name for the address object (replace dots with underscores)
+  const addressName = `ADDR_${address.replace(/\./g, '_')}`;
+
+  try {
+    // Check if address object already exists
+    const existing = await apiClient.firewall.getAddress(addressName);
+    if (existing.success && existing.data) {
+      console.log(`Address object ${addressName} already exists, reusing it`);
+      return addressName;
+    }
+  } catch (error) {
+    // Address doesn't exist, we'll create it
+    console.log(`Address object ${addressName} does not exist, creating it`);
+  }
+
+  // Create the address object
+  // For single IP address, use subnet format: "IP MASK" (e.g., "10.1.1.5 255.255.255.255")
+  const addressData = {
+    name: addressName,
+    subnet: `${address} 255.255.255.255`, // Single IP with full mask
+    type: 'ipmask',
+  };
+
+  console.log(`Creating address object: ${JSON.stringify(addressData, null, 2)}`);
+  const createResult = await apiClient.firewall.createAddress(addressData);
+  
+  if (createResult.success) {
+    console.log(`Successfully created address object ${addressName}`);
+    return addressName;
+  } else {
+    // Check if error is because it already exists (error -2)
+    if (createResult.error?.includes('-2') || createResult.error?.includes('already exists')) {
+      console.log(`Address object ${addressName} already exists (created concurrently), reusing it`);
+      return addressName;
+    }
+    
+    // If creation fails for another reason, log and return the name anyway
+    // The policy creation will fail with a clearer error if the address doesn't exist
+    console.warn(`Failed to create address object ${addressName}: ${createResult.error}`);
+    return addressName;
+  }
+}
+
+/**
  * Deploy policy to FortiGate device using REST API
  */
 async function deployToFortiGate(deviceName: string, policy: Policy): Promise<{ success: boolean; message?: string; vendorId?: string }> {
@@ -87,10 +143,46 @@ async function deployToFortiGate(deviceName: string, policy: Policy): Promise<{ 
     }
 
     // Convert policy to FortiGate format
-    const fortigatePolicy = convertPolicyToFortiGate(policy);
+    let fortigatePolicy = convertPolicyToFortiGate(policy);
+    
+    // Ensure address objects exist before creating policy
+    // Extract IP addresses from srcaddr and dstaddr arrays
+    const srcIp = Array.isArray(fortigatePolicy.srcaddr) && fortigatePolicy.srcaddr.length > 0
+      ? fortigatePolicy.srcaddr[0].name
+      : null;
+    const dstIp = Array.isArray(fortigatePolicy.dstaddr) && fortigatePolicy.dstaddr.length > 0
+      ? fortigatePolicy.dstaddr[0].name
+      : null;
+
+    // Check if they look like IP addresses (simple regex check)
+    const ipRegex = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+    const srcIsIp = srcIp && ipRegex.test(srcIp);
+    const dstIsIp = dstIp && ipRegex.test(dstIp);
+
+    // Ensure address objects exist
+    if (srcIsIp) {
+      const srcAddrName = await ensureAddressObject(apiClient, srcIp, true);
+      fortigatePolicy.srcaddr = [{ name: srcAddrName }];
+    }
+
+    if (dstIsIp) {
+      const dstAddrName = await ensureAddressObject(apiClient, dstIp, true);
+      fortigatePolicy.dstaddr = [{ name: dstAddrName }];
+    }
+    
+    // Log the policy being deployed for debugging
+    console.log('Deploying policy to FortiGate:', JSON.stringify(fortigatePolicy, null, 2));
 
     // Deploy the policy using the firewall client
     const deployResult = await apiClient.firewall.createPolicy(fortigatePolicy);
+    
+    // Log the deployment result for debugging
+    console.log('FortiGate deployment result:', {
+      success: deployResult.success,
+      error: deployResult.error,
+      data: deployResult.data,
+      status: deployResult.status,
+    });
     
     if (deployResult.success) {
       // Extract policy ID from FortiGate response
@@ -103,9 +195,17 @@ async function deployToFortiGate(deviceName: string, policy: Policy): Promise<{ 
         vendorId: policyId.toString(),
       };
     } else {
+      // Provide more detailed error information
+      let errorMsg = deployResult.error || 'Unknown deployment error';
+      
+      // Check if addresses need to be created first
+      if (errorMsg.includes('-3') || errorMsg.includes('Invalid value')) {
+        errorMsg += '\n\n💡 Tip: The source or destination address might not exist in FortiGate. You may need to create address objects first, or use existing address object names instead of IP addresses.';
+      }
+      
       return {
         success: false,
-        message: `Deployment failed: ${deployResult.error}`,
+        message: `Deployment failed: ${errorMsg}`,
       };
     }
   } catch (error: any) {

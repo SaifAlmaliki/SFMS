@@ -154,11 +154,39 @@ export abstract class FortiGateBaseClient {
           vdom: data.vdom,
         };
       } else {
-        // Error response
-        const errorMessage = data.error?.message || 
+        // Error response - FortiGate API returns errors in different formats
+        // Check for error code (e.g., -3, -1, etc.)
+        const errorCode = data.error || data.cli_error || data.http_status;
+        let errorMessage = data.error?.message || 
                            data.message || 
-                           (data.status === 'error' ? data.error || 'Unknown error' : null) ||
+                           data.cli_error ||
+                           (data.status === 'error' ? (data.error || 'Unknown error') : null) ||
                            `HTTP ${response.status}: ${response.statusText}`;
+        
+        // If we have an error code, include it in the message
+        if (errorCode !== undefined && errorCode !== null) {
+          // Map common FortiGate error codes
+          const errorCodeMap: Record<number | string, string> = {
+            '-3': 'Invalid value or parameter',
+            '-1': 'Invalid command or syntax',
+            '-2': 'Object already exists',
+            '-4': 'Object not found',
+            '-5': 'Permission denied',
+            '-6': 'Invalid operation',
+          };
+          
+          const codeDescription = errorCodeMap[errorCode] || 'Unknown error code';
+          errorMessage = `${errorMessage} (Error Code: ${errorCode} - ${codeDescription})`;
+        }
+        
+        // Log full error details for debugging
+        console.error('FortiGate API error response:', {
+          url,
+          httpStatus: response.status,
+          errorCode,
+          errorMessage,
+          fullResponse: data,
+        });
         
         return {
           success: false,
@@ -271,11 +299,39 @@ export abstract class FortiGateBaseClient {
           vdom: data.vdom,
         };
       } else {
-        // Error response
-        const errorMessage = data.error?.message || 
+        // Error response - FortiGate API returns errors in different formats
+        // Check for error code (e.g., -3, -1, etc.)
+        const errorCode = data.error || data.cli_error || data.http_status;
+        let errorMessage = data.error?.message || 
                            data.message || 
-                           (data.status === 'error' ? data.error || 'Unknown error' : null) ||
+                           data.cli_error ||
+                           (data.status === 'error' ? (data.error || 'Unknown error') : null) ||
                            `HTTP ${response.status}: ${response.statusText}`;
+        
+        // If we have an error code, include it in the message
+        if (errorCode !== undefined && errorCode !== null) {
+          // Map common FortiGate error codes
+          const errorCodeMap: Record<number | string, string> = {
+            '-3': 'Invalid value or parameter',
+            '-1': 'Invalid command or syntax',
+            '-2': 'Object already exists',
+            '-4': 'Object not found',
+            '-5': 'Permission denied',
+            '-6': 'Invalid operation',
+          };
+          
+          const codeDescription = errorCodeMap[errorCode] || 'Unknown error code';
+          errorMessage = `${errorMessage} (Error Code: ${errorCode} - ${codeDescription})`;
+        }
+        
+        // Log full error details for debugging
+        console.error('FortiGate API error response:', {
+          url,
+          httpStatus: response.status,
+          errorCode,
+          errorMessage,
+          fullResponse: data,
+        });
         
         return {
           success: false,
@@ -388,11 +444,39 @@ export abstract class FortiGateBaseClient {
           vdom: data.vdom,
         };
       } else {
-        // Error response
-        const errorMessage = data.error?.message || 
+        // Error response - FortiGate API returns errors in different formats
+        // Check for error code (e.g., -3, -1, etc.)
+        const errorCode = data.error || data.cli_error || data.http_status;
+        let errorMessage = data.error?.message || 
                            data.message || 
-                           (data.status === 'error' ? data.error || 'Unknown error' : null) ||
+                           data.cli_error ||
+                           (data.status === 'error' ? (data.error || 'Unknown error') : null) ||
                            `HTTP ${response.status}: ${response.statusText}`;
+        
+        // If we have an error code, include it in the message
+        if (errorCode !== undefined && errorCode !== null) {
+          // Map common FortiGate error codes
+          const errorCodeMap: Record<number | string, string> = {
+            '-3': 'Invalid value or parameter',
+            '-1': 'Invalid command or syntax',
+            '-2': 'Object already exists',
+            '-4': 'Object not found',
+            '-5': 'Permission denied',
+            '-6': 'Invalid operation',
+          };
+          
+          const codeDescription = errorCodeMap[errorCode] || 'Unknown error code';
+          errorMessage = `${errorMessage} (Error Code: ${errorCode} - ${codeDescription})`;
+        }
+        
+        // Log full error details for debugging
+        console.error('FortiGate API error response:', {
+          url,
+          httpStatus: response.status,
+          errorCode,
+          errorMessage,
+          fullResponse: data,
+        });
         
         return {
           success: false,
@@ -503,11 +587,39 @@ export abstract class FortiGateBaseClient {
           vdom: data.vdom,
         };
       } else {
-        // Error response
-        const errorMessage = data.error?.message || 
+        // Error response - FortiGate API returns errors in different formats
+        // Check for error code (e.g., -3, -1, etc.)
+        const errorCode = data.error || data.cli_error || data.http_status;
+        let errorMessage = data.error?.message || 
                            data.message || 
-                           (data.status === 'error' ? data.error || 'Unknown error' : null) ||
+                           data.cli_error ||
+                           (data.status === 'error' ? (data.error || 'Unknown error') : null) ||
                            `HTTP ${response.status}: ${response.statusText}`;
+        
+        // If we have an error code, include it in the message
+        if (errorCode !== undefined && errorCode !== null) {
+          // Map common FortiGate error codes
+          const errorCodeMap: Record<number | string, string> = {
+            '-3': 'Invalid value or parameter',
+            '-1': 'Invalid command or syntax',
+            '-2': 'Object already exists',
+            '-4': 'Object not found',
+            '-5': 'Permission denied',
+            '-6': 'Invalid operation',
+          };
+          
+          const codeDescription = errorCodeMap[errorCode] || 'Unknown error code';
+          errorMessage = `${errorMessage} (Error Code: ${errorCode} - ${codeDescription})`;
+        }
+        
+        // Log full error details for debugging
+        console.error('FortiGate API error response:', {
+          url,
+          httpStatus: response.status,
+          errorCode,
+          errorMessage,
+          fullResponse: data,
+        });
         
         return {
           success: false,
@@ -620,11 +732,39 @@ export abstract class FortiGateBaseClient {
           vdom: data.vdom,
         };
       } else {
-        // Error response
-        const errorMessage = data.error?.message || 
+        // Error response - FortiGate API returns errors in different formats
+        // Check for error code (e.g., -3, -1, etc.)
+        const errorCode = data.error || data.cli_error || data.http_status;
+        let errorMessage = data.error?.message || 
                            data.message || 
-                           (data.status === 'error' ? data.error || 'Unknown error' : null) ||
+                           data.cli_error ||
+                           (data.status === 'error' ? (data.error || 'Unknown error') : null) ||
                            `HTTP ${response.status}: ${response.statusText}`;
+        
+        // If we have an error code, include it in the message
+        if (errorCode !== undefined && errorCode !== null) {
+          // Map common FortiGate error codes
+          const errorCodeMap: Record<number | string, string> = {
+            '-3': 'Invalid value or parameter',
+            '-1': 'Invalid command or syntax',
+            '-2': 'Object already exists',
+            '-4': 'Object not found',
+            '-5': 'Permission denied',
+            '-6': 'Invalid operation',
+          };
+          
+          const codeDescription = errorCodeMap[errorCode] || 'Unknown error code';
+          errorMessage = `${errorMessage} (Error Code: ${errorCode} - ${codeDescription})`;
+        }
+        
+        // Log full error details for debugging
+        console.error('FortiGate API error response:', {
+          url,
+          httpStatus: response.status,
+          errorCode,
+          errorMessage,
+          fullResponse: data,
+        });
         
         return {
           success: false,
