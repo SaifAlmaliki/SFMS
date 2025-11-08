@@ -163,7 +163,7 @@ export function LandingPage() {
               </Button>
             </Link>
             <Link href="/policies">
-              <Button variant="outline" className="rounded-full px-8 py-6 text-lg hover:scale-105 transition-transform">
+              <Button variant="outline" className="rounded-full px-8 py-6 text-lg hover:scale-105 transition-transform border-2 border-zinc-300 dark:border-white/30 bg-white/90 dark:bg-zinc-900/50 text-zinc-900 dark:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800/70">
                 Explore Features
               </Button>
             </Link>
