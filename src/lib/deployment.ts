@@ -40,9 +40,12 @@ async function ensureAddressObject(
       console.log(`Address object ${addressName} already exists, reusing it`);
       return addressName;
     }
-  } catch (error) {
-    // Address doesn't exist, we'll create it
+    // If we get here, address doesn't exist (404 is expected and not an error)
     console.log(`Address object ${addressName} does not exist, creating it`);
+  } catch (error) {
+    // 404 is expected when address doesn't exist, not a real error
+    // Other errors will be caught and handled below
+    console.log(`Address object ${addressName} does not exist (404 expected), creating it`);
   }
 
   // Create the address object
