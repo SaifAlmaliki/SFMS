@@ -392,8 +392,9 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
         // Get the selected vendor configuration
         const selectedVendorConfig = getVendorById(vendor) || getDefaultVendor();
         
-        // Convert to vendor-specific format
-        const vendorPolicy = convertToVendorFormat(parsedRequest, selectedVendorConfig);
+        // Convert to vendor-specific format (add action since parsedRequest doesn't have it)
+        const policyWithAction = { ...parsedRequest, action: 'Allow' };
+        const vendorPolicy = convertToVendorFormat(policyWithAction, selectedVendorConfig);
         
         // Validate the policy
         const validation = validatePolicy(vendorPolicy, selectedVendorConfig);

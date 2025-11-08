@@ -229,10 +229,33 @@ function convertToFortiGate(genericPolicy: any): FortiGatePolicy {
   
   // Addresses - use IP addresses or FQDNs
   // FortiGate API expects arrays
+  // Priority: destinationIp > destinationFqdn > destinationUrl > destination (from DB)
+  // Exclude common words that shouldn't be used as destinations
+  const excludedWords = ['access', 'connect', 'reach', 'use', 'allow', 'deny'];
+  const destinationValue = genericPolicy.destinationIp 
+    || genericPolicy.destinationFqdn 
+    || genericPolicy.destinationUrl 
+    || (genericPolicy.destination && 
+        !excludedWords.includes(genericPolicy.destination.toLowerCase()) && 
+        genericPolicy.destination.trim() !== '' 
+        ? genericPolicy.destination 
+        : undefined);
+  
   const srcAddr = mapToFortiGateAddress(genericPolicy.sourceIp || genericPolicy.source);
-  const dstAddr = mapToFortiGateAddress(genericPolicy.destinationIp || genericPolicy.destinationFqdn || genericPolicy.destinationUrl || genericPolicy.destination);
+  const dstAddr = mapToFortiGateAddress(destinationValue);
   const srcaddr = [{ name: srcAddr }];
   const dstaddr = [{ name: dstAddr }];
+  
+  // Debug logging
+  if (!genericPolicy.destinationIp && !genericPolicy.destinationFqdn && !genericPolicy.destinationUrl) {
+    console.warn('Warning: No destination IP/FQDN/URL found in policy. Generic policy:', {
+      destinationIp: genericPolicy.destinationIp,
+      destinationFqdn: genericPolicy.destinationFqdn,
+      destinationUrl: genericPolicy.destinationUrl,
+      destination: genericPolicy.destination,
+      finalDestination: destinationValue
+    });
+  }
   
   return {
     name: genericPolicy.name || `Policy-${Date.now()}`,

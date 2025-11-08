@@ -186,33 +186,68 @@ function formatPoliciesList(policies: any[]): string {
 }
 
 /**
- * Parse policy request and extract details
+ * Extract policy information using AI (more intelligent than rule-based parsing)
  */
-function parsePolicyRequest(query: string): {
-  action: 'Allow' | 'Deny';
-  source: string;
-  destination: string;
-  name: string;
-} | null {
-  // Simple parser - can be enhanced with more sophisticated NLP
-  const lowerQuery = query.toLowerCase();
-  
-  let action: 'Allow' | 'Deny' = 'Allow';
-  if (lowerQuery.includes('block') || lowerQuery.includes('deny') || lowerQuery.includes('prevent')) {
-    action = 'Deny';
+async function extractPolicyWithAI(query: string): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const extractionSchema = z.object({
+      sourceIp: z.string().describe('Source IP address (e.g., "10.1.1.5")'),
+      destinationIp: z.string().optional().describe('Destination IP address if mentioned (e.g., "8.8.8.8")'),
+      destinationFqdn: z.string().optional().describe('Destination FQDN/domain name if mentioned (e.g., "api.example.com")'),
+      destinationUrl: z.string().optional().describe('Destination URL if mentioned (e.g., "https://api.example.com")'),
+      port: z.number().describe('Destination port number (e.g., 443, 80, 8080)'),
+      protocol: z.string().optional().describe('Protocol if mentioned (TCP, UDP, ICMP, etc.)'),
+      businessJustification: z.string().optional().describe('Business justification or reason for the policy if mentioned. IMPORTANT: Do NOT use action words like "access", "connect", "reach", "use" or IP addresses as justification. Only extract actual business reasons like "for API integration", "to support customer portal", "for backup service", etc. If no real business justification is mentioned, leave this field empty.'),
+      targetDevice: z.string().optional().describe('Target device name if mentioned (e.g., "apiprod-01")'),
+      sourceZone: z.string().optional().describe('Source zone/interface if mentioned (e.g., "internal", "dmz")'),
+      destinationZone: z.string().optional().describe('Destination zone/interface if mentioned (e.g., "external", "wan")'),
+    });
+
+    const extractionPrompt = ai.definePrompt({
+      name: 'policyExtractionPrompt',
+      input: { schema: z.object({ query: z.string() }) },
+      output: { schema: extractionSchema },
+      prompt: `Extract firewall policy information from the following user query. Be intelligent and extract all relevant information, even if the wording is informal or uses synonyms.
+
+Examples:
+- "Allow 10.1.1.5 to access 8.8.8.8 on port 443 on device apiprod-01" 
+  → sourceIp: "10.1.1.5", destinationIp: "8.8.8.8", port: 443, targetDevice: "apiprod-01", businessJustification: null (no real justification mentioned)
+- "Block 192.168.1.10 from reaching api.example.com on port 80 for customer portal access"
+  → sourceIp: "192.168.1.10", destinationFqdn: "api.example.com", port: 80, businessJustification: "customer portal access"
+- "Allow 10.0.0.5 to connect to https://service.company.com for backup service"
+  → sourceIp: "10.0.0.5", destinationUrl: "https://service.company.com", port: 443, businessJustification: "backup service"
+
+IMPORTANT RULES:
+- Do NOT use action words like "access", "connect", "reach", "use" as business justification
+- Do NOT use IP addresses or destinations as business justification
+- Only extract actual business reasons (e.g., "for API integration", "to support customer portal", "for backup service")
+- If no real business justification is mentioned, leave businessJustification empty/null
+
+User query: {{{query}}}
+
+Extract the policy information. If a field is not mentioned, omit it (don't make up values).`,
+    });
+
+    const { output } = await extractionPrompt({ query });
+    
+    if (output && output.sourceIp && output.port) {
+      return {
+        success: true,
+        data: output,
+      };
+    } else {
+      return {
+        success: false,
+        error: 'AI extraction failed: missing required fields (sourceIp or port)',
+      };
+    }
+  } catch (error: any) {
+    console.error('AI policy extraction error:', error);
+    return {
+      success: false,
+      error: `AI extraction failed: ${error.message}`,
+    };
   }
-  
-  // Extract source (simple pattern matching)
-  const sourceMatch = query.match(/from\s+([A-Za-z0-9\s-]+?)(?:\s+to|\s+allow|\s+block|$)/i);
-  const destMatch = query.match(/to\s+([A-Za-z0-9\s-]+?)(?:\s+allow|\s+block|$)/i);
-  
-  const source = sourceMatch ? sourceMatch[1].trim() : 'Unknown';
-  const destination = destMatch ? destMatch[1].trim() : 'Unknown';
-  
-  // Generate name
-  const name = `${action} Traffic ${source} to ${destination}`.substring(0, 100);
-  
-  return { action, source, destination, name };
 }
 
 export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<FirewallChatAgentOutput> {
@@ -273,7 +308,14 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
   let parseError: string | undefined = undefined;
   
   if (mightBePolicyRequest) {
-    const parseResult = PolicyRequestParser.parse(query);
+    // First try AI-based extraction (more intelligent for complex queries)
+    let parseResult = await extractPolicyWithAI(query);
+    
+    // Fallback to rule-based parser if AI extraction fails
+    if (!parseResult.success || !parseResult.data) {
+      parseResult = PolicyRequestParser.parse(query);
+    }
+    
     if (parseResult.success && parseResult.data) {
       // Additional validation: Ensure all critical fields are valid
       const data = parseResult.data;
@@ -528,8 +570,22 @@ Provide a helpful response.`,
       // Get the selected vendor configuration
       const selectedVendorConfig = getVendorById(vendor) || getDefaultVendor();
       
-      // Convert to vendor-specific format
-      const vendorPolicy = convertToVendorFormat(parsedRequest, selectedVendorConfig);
+      // Convert to vendor-specific format (add action since parsedRequest doesn't have it)
+      const policyWithAction = { ...parsedRequest, action: 'Allow' };
+      
+      // Debug: Log parsed request to verify destination is extracted correctly
+      if (!parsedRequest.destinationIp && !parsedRequest.destinationFqdn && !parsedRequest.destinationUrl) {
+        console.warn('Warning: Parsed request missing destination:', {
+          sourceIp: parsedRequest.sourceIp,
+          destinationIp: parsedRequest.destinationIp,
+          destinationFqdn: parsedRequest.destinationFqdn,
+          destinationUrl: parsedRequest.destinationUrl,
+          port: parsedRequest.port,
+          businessJustification: parsedRequest.businessJustification,
+        });
+      }
+      
+      const vendorPolicy = convertToVendorFormat(policyWithAction, selectedVendorConfig);
       
       // Validate the policy
       const validation = validatePolicy(vendorPolicy, selectedVendorConfig);
@@ -701,18 +757,40 @@ function generateVendorCLI(policy: any, vendor: FirewallVendor): string {
  */
 function generateFortiGateCLI(policy: any): string {
   // Handle port-specific service
-  let service = policy.service || 'ALL';
-  if (policy.destPort && policy.service === 'ALL') {
+  let service = 'ALL';
+  if (policy.service) {
+    // Handle array format from API
+    if (Array.isArray(policy.service) && policy.service.length > 0) {
+      service = policy.service[0].name || 'ALL';
+    } else if (typeof policy.service === 'string') {
+      service = policy.service;
+    }
+  }
+  
+  if (policy.destPort && service === 'ALL') {
     service = `port-${policy.destPort}`;
   }
+  
+  // Extract values from arrays if needed
+  const extractValue = (value: any): string => {
+    if (Array.isArray(value) && value.length > 0) {
+      return value[0].name || 'any';
+    }
+    return value || 'any';
+  };
+  
+  const srcintf = extractValue(policy.srcintf);
+  const dstintf = extractValue(policy.dstintf);
+  const srcaddr = extractValue(policy.srcaddr);
+  const dstaddr = extractValue(policy.dstaddr);
   
   return `config firewall policy
   edit 0
     set name "${policy.name || 'Policy'}"
-    set srcintf "${policy.srcintf || 'any'}"
-    set dstintf "${policy.dstintf || 'any'}"
-    set srcaddr "${policy.srcaddr || 'all'}"
-    set dstaddr "${policy.dstaddr || 'all'}"
+    set srcintf "${srcintf}"
+    set dstintf "${dstintf}"
+    set srcaddr "${srcaddr}"
+    set dstaddr "${dstaddr}"
     set action ${policy.action || 'accept'}
     set schedule "${policy.schedule || 'always'}"
     set service "${service}"

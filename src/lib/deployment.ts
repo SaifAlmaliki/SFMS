@@ -32,9 +32,30 @@ async function deployToFortiGate(deviceName: string, policy: Policy): Promise<{ 
     });
 
     if (!device) {
+      // Try exact match as fallback
+      const exactDevice = await prisma.device.findFirst({
+        where: { 
+          name: deviceName,
+          vendor: 'fortigate',
+        }
+      });
+      
+      if (exactDevice) {
+        return {
+          success: false,
+          message: `FortiGate device '${deviceName}' found but status is '${exactDevice.status}', not 'Active'`,
+        };
+      }
+      
+      // List available devices for debugging
+      const allDevices = await prisma.device.findMany({
+        where: { vendor: 'fortigate' },
+        select: { name: true, status: true },
+      });
+      
       return {
         success: false,
-        message: `FortiGate device '${deviceName}' not found or inactive`,
+        message: `FortiGate device '${deviceName}' not found. Available devices: ${allDevices.map(d => `${d.name} (${d.status})`).join(', ') || 'none'}`,
       };
     }
 
