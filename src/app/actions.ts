@@ -13,6 +13,10 @@ import { validateFirewallPolicy } from '@/ai/flows/validate-firewall-policy';
 import { simulatePolicy } from '@/ai/flows/simulate-policy';
 import { emulateAdversary } from '@/ai/flows/emulate-adversary';
 import { createIncident } from '@/ai/flows/create-incident';
+import { FortiGateClient, FortiGateDevice } from '@/lib/fortigate';
+import { PrismaClient } from '@/generated/prisma';
+
+const prisma = new PrismaClient();
 
 const policySchema = z.object({
   description: z.string().min(10, 'Please provide a more detailed description.'),
@@ -581,6 +585,155 @@ export async function rejectTicketAction(ticketId: string, reason: string) {
   } catch (e) {
     console.error('Failed to reject ticket:', e);
     return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+  }
+}
+
+/**
+ * Test FortiGate connection
+ */
+const fortigateConnectionSchema = z.object({
+  hostname: z.string().min(1, 'Hostname is required'),
+  apiUsername: z.string().min(1, 'API username is required'),
+  apiKey: z.string().min(1, 'API key is required'),
+});
+
+export async function testFortiGateConnection(input: z.infer<typeof fortigateConnectionSchema>) {
+  try {
+    const validated = fortigateConnectionSchema.parse(input);
+
+    const device: FortiGateDevice = {
+      name: validated.hostname,
+      ip: validated.hostname,
+      apiKey: validated.apiKey,
+    };
+
+    const client = new FortiGateClient(device);
+    const result = await client.testConnection();
+
+    if (result.success) {
+      return {
+        success: true,
+        data: result.data,
+        serial: result.serial,
+        version: result.version,
+        build: result.build,
+      };
+    } else {
+      // Log detailed error for debugging
+      console.error('FortiGate connection failed:', {
+        error: result.error,
+        status: result.status,
+        httpStatus: result.httpStatus,
+        url: `https://${validated.hostname}/api/v2/monitor/system/status`,
+      });
+      
+      return {
+        success: false,
+        error: result.error || `Connection failed (HTTP ${result.httpStatus || result.status || 'unknown'})`,
+      };
+    }
+  } catch (e) {
+    // Log full error details
+    console.error('FortiGate connection error:', e);
+    
+    if (e instanceof z.ZodError) {
+      return {
+        success: false,
+        error: e.errors.map((err) => err.message).join(', '),
+      };
+    }
+    
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    const errorStack = e instanceof Error ? e.stack : undefined;
+    
+    console.error('Full error details:', { errorMessage, errorStack });
+    
+    return {
+      success: false,
+      error: errorMessage || 'Unknown error occurred. Check server logs for details.',
+    };
+  }
+}
+
+/**
+ * Save FortiGate device configuration
+ */
+const saveDeviceSchema = z.object({
+  name: z.string().min(1, 'Device name is required'),
+  hostname: z.string().min(1, 'Hostname is required'),
+  apiUsername: z.string().min(1, 'API username is required'),
+  apiKey: z.string().min(1, 'API key is required'),
+  serial: z.string().optional(),
+  version: z.string().optional(),
+  build: z.number().optional(),
+});
+
+export async function saveFortiGateDevice(input: z.infer<typeof saveDeviceSchema>) {
+  try {
+    const validated = saveDeviceSchema.parse(input);
+
+    // Check if device with same name or IP already exists
+    const existingDevice = await prisma.device.findFirst({
+      where: {
+        OR: [
+          { name: validated.name },
+          { ip: validated.hostname },
+        ],
+      },
+    });
+
+    if (existingDevice) {
+      // Update existing device
+      await prisma.device.update({
+        where: { id: existingDevice.id },
+        data: {
+          name: validated.name,
+          ip: validated.hostname,
+          vendor: 'fortigate',
+          apiKey: validated.apiKey,
+          version: validated.version,
+          status: 'Active',
+          lastSync: new Date(),
+        },
+      });
+
+      revalidatePath('/settings');
+      return {
+        success: true,
+        message: 'Device updated successfully',
+      };
+    } else {
+      // Create new device
+      await prisma.device.create({
+        data: {
+          name: validated.name,
+          ip: validated.hostname,
+          vendor: 'fortigate',
+          apiKey: validated.apiKey,
+          version: validated.version,
+          status: 'Active',
+          lastSync: new Date(),
+        },
+      });
+
+      revalidatePath('/settings');
+      return {
+        success: true,
+        message: 'Device saved successfully',
+      };
+    }
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      return {
+        success: false,
+        error: e.errors.map((err) => err.message).join(', '),
+      };
+    }
+    console.error('Failed to save device:', e);
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'Unknown error occurred',
+    };
   }
 }
 

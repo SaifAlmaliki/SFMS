@@ -1,0 +1,292 @@
+'use client';
+
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2, CheckCircle2, XCircle, Server, Key, Globe } from 'lucide-react';
+import { testFortiGateConnection, saveFortiGateDevice } from '@/app/actions';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+
+interface ConnectionStatus {
+  success: boolean;
+  data?: {
+    serial?: string;
+    version?: string;
+    build?: number;
+    hostname?: string;
+  };
+  error?: string;
+  serial?: string;
+  version?: string;
+  build?: number;
+}
+
+export function FortiGateConnection() {
+  const { toast } = useToast();
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null);
+  const [formData, setFormData] = useState({
+    hostname: 'apiprod.viewdns.net',
+    apiUsername: 'aiprod',
+    apiKey: 'nQdNQqy79m8Qwn4dc1h8fQsfNkbhtH',
+    deviceName: 'apiprod-01',
+  });
+
+  const handleTestConnection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsConnecting(true);
+    setConnectionStatus(null);
+
+    try {
+      const result = await testFortiGateConnection({
+        hostname: formData.hostname,
+        apiUsername: formData.apiUsername,
+        apiKey: formData.apiKey,
+      });
+
+      setConnectionStatus(result);
+      
+      if (result.success) {
+        toast({
+          title: 'Connection Successful',
+          description: `Connected to FortiGate ${result.version || ''} (Serial: ${result.serial || 'N/A'})`,
+        });
+      } else {
+        toast({
+          title: 'Connection Failed',
+          description: result.error || 'Unable to connect to FortiGate device',
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
+      setConnectionStatus({
+        success: false,
+        error: error.message || 'Failed to test connection',
+      });
+      toast({
+        title: 'Connection Error',
+        description: error.message || 'An unexpected error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleSaveDevice = async () => {
+    if (!connectionStatus?.success) {
+      toast({
+        title: 'Cannot Save',
+        description: 'Please test connection first and ensure it is successful',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const result = await saveFortiGateDevice({
+        name: formData.deviceName,
+        hostname: formData.hostname,
+        apiUsername: formData.apiUsername,
+        apiKey: formData.apiKey,
+        serial: connectionStatus.serial,
+        version: connectionStatus.version,
+        build: connectionStatus.build,
+      });
+
+      if (result.success) {
+        toast({
+          title: 'Device Saved',
+          description: `FortiGate device "${formData.deviceName}" has been saved successfully`,
+        });
+      } else {
+        toast({
+          title: 'Save Failed',
+          description: result.error || 'Failed to save device configuration',
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Save Error',
+        description: error.message || 'An unexpected error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Server className="h-5 w-5" />
+          FortiGate Device Connection
+        </CardTitle>
+        <CardDescription>
+          Connect to your FortiGate firewall device using REST API credentials.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <form onSubmit={handleTestConnection} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="hostname" className="flex items-center gap-2">
+              <Globe className="h-4 w-4" />
+              Hostname / IP Address
+            </Label>
+            <Input
+              id="hostname"
+              name="hostname"
+              type="text"
+              placeholder="apiprod.viewdns.net"
+              value={formData.hostname}
+              onChange={(e) => setFormData({ ...formData, hostname: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="apiUsername">API Username</Label>
+            <Input
+              id="apiUsername"
+              name="apiUsername"
+              type="text"
+              placeholder="aiprod"
+              value={formData.apiUsername}
+              onChange={(e) => setFormData({ ...formData, apiUsername: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="apiKey" className="flex items-center gap-2">
+              <Key className="h-4 w-4" />
+              API Key
+            </Label>
+            <Input
+              id="apiKey"
+              name="apiKey"
+              type="password"
+              placeholder="Enter your API key"
+              value={formData.apiKey}
+              onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="deviceName">Device Name (for saving)</Label>
+            <Input
+              id="deviceName"
+              name="deviceName"
+              type="text"
+              placeholder="apiprod-01"
+              value={formData.deviceName}
+              onChange={(e) => setFormData({ ...formData, deviceName: e.target.value })}
+              required
+            />
+          </div>
+
+          <Button type="submit" disabled={isConnecting} className="w-full">
+            {isConnecting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Testing Connection...
+              </>
+            ) : (
+              <>
+                <Server className="mr-2 h-4 w-4" />
+                Test Connection
+              </>
+            )}
+          </Button>
+        </form>
+
+        {connectionStatus && (
+          <>
+            <Separator />
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Connection Status</h3>
+                {connectionStatus.success ? (
+                  <Badge variant="default" className="bg-green-500">
+                    <CheckCircle2 className="mr-1 h-3 w-3" />
+                    Connected
+                  </Badge>
+                ) : (
+                  <Badge variant="destructive">
+                    <XCircle className="mr-1 h-3 w-3" />
+                    Failed
+                  </Badge>
+                )}
+              </div>
+
+              {connectionStatus.success ? (
+                <div className="space-y-3 rounded-lg border bg-muted/50 p-4">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium text-muted-foreground">Serial Number:</span>
+                      <p className="mt-1 font-mono">{connectionStatus.serial || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-muted-foreground">Version:</span>
+                      <p className="mt-1">{connectionStatus.version || 'N/A'}</p>
+                    </div>
+                    {connectionStatus.build && (
+                      <div>
+                        <span className="font-medium text-muted-foreground">Build:</span>
+                        <p className="mt-1">{connectionStatus.build}</p>
+                      </div>
+                    )}
+                    {connectionStatus.data?.hostname && (
+                      <div>
+                        <span className="font-medium text-muted-foreground">Hostname:</span>
+                        <p className="mt-1">{connectionStatus.data.hostname}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    onClick={handleSaveDevice}
+                    disabled={isSaving}
+                    className="w-full"
+                    variant="default"
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Device Configuration'
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+                  <p className="text-sm text-destructive">
+                    <strong>Error:</strong> {connectionStatus.error || 'Unknown error occurred'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+

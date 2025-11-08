@@ -3,6 +3,9 @@
  * Handles ticket creation, updates, and synchronization with ServiceNow
  */
 
+import 'server-only';
+import { serverFetch } from '@/lib/http-client';
+
 export interface ServiceNowConfig {
   instanceUrl: string;
   username: string;
@@ -51,7 +54,7 @@ export class ServiceNowApiClient {
    */
   async testConnection(): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/table/sys_user?sysparm_limit=1`, {
+      const response = await serverFetch(`${this.baseUrl}/table/sys_user?sysparm_limit=1`, {
         method: 'GET',
         headers: {
           'Authorization': `Basic ${btoa(`${this.config.username}:${this.config.password}`)}`,
@@ -95,7 +98,7 @@ export class ServiceNowApiClient {
         ...ticket
       };
 
-      const response = await fetch(`${this.baseUrl}/table/change_request`, {
+      const response = await serverFetch(`${this.baseUrl}/table/change_request`, {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${btoa(`${this.config.username}:${this.config.password}`)}`,
@@ -145,7 +148,7 @@ export class ServiceNowApiClient {
         ...ticket
       };
 
-      const response = await fetch(`${this.baseUrl}/table/incident`, {
+      const response = await serverFetch(`${this.baseUrl}/table/incident`, {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${btoa(`${this.config.username}:${this.config.password}`)}`,
@@ -181,7 +184,7 @@ export class ServiceNowApiClient {
    */
   async updateChangeRequest(sysId: string, updates: Partial<ServiceNowTicket>): Promise<{ success: boolean; data?: ServiceNowTicket; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/table/change_request/${sysId}`, {
+      const response = await serverFetch(`${this.baseUrl}/table/change_request/${sysId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Basic ${btoa(`${this.config.username}:${this.config.password}`)}`,
@@ -217,7 +220,7 @@ export class ServiceNowApiClient {
    */
   async getChangeRequest(sysId: string): Promise<{ success: boolean; data?: ServiceNowTicket; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/table/change_request/${sysId}`, {
+      const response = await serverFetch(`${this.baseUrl}/table/change_request/${sysId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Basic ${btoa(`${this.config.username}:${this.config.password}`)}`,
@@ -252,7 +255,7 @@ export class ServiceNowApiClient {
    */
   async searchChangeRequests(query: string): Promise<{ success: boolean; data?: ServiceNowTicket[]; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/table/change_request?sysparm_query=${encodeURIComponent(query)}`, {
+      const response = await serverFetch(`${this.baseUrl}/table/change_request?sysparm_query=${encodeURIComponent(query)}`, {
         method: 'GET',
         headers: {
           'Authorization': `Basic ${btoa(`${this.config.username}:${this.config.password}`)}`,
@@ -287,7 +290,7 @@ export class ServiceNowApiClient {
    */
   async addWorkNotes(sysId: string, notes: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/table/change_request/${sysId}`, {
+      const response = await serverFetch(`${this.baseUrl}/table/change_request/${sysId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Basic ${btoa(`${this.config.username}:${this.config.password}`)}`,
