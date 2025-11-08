@@ -15,23 +15,62 @@ import { Agent, fetch as undiciFetch } from 'undici';
 const httpsAgent = new Agent({
   connect: {
     rejectUnauthorized: false,
+    timeout: 20000, // 20 second timeout for connections
   },
 });
 
 // Custom fetch function that uses the SSL-disabled dispatcher
 // This only affects FortiGate API calls, not other fetch requests
 // Node.js 18+ fetch uses undici, which requires a dispatcher instead of agent
-async function fortigateFetch(url: string | URL, init?: RequestInit): Promise<Response> {
+async function fortigateFetch(url: string | URL, init?: RequestInit & { timeout?: number }): Promise<Response> {
+  const timeout = init?.timeout || 20000; // Default 20 seconds, can be overridden
+  
+  // Create abort controller for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  
   // For server-side (Node.js), use undici fetch with custom dispatcher
   if (typeof url === 'string' && url.startsWith('https://')) {
-    // Use undici fetch with custom dispatcher to disable SSL verification
-    return undiciFetch(url, {
-      ...init,
-      dispatcher: httpsAgent,
-    } as any);
+    // Create a timeout-aware dispatcher
+    const timeoutAgent = new Agent({
+      connect: {
+        rejectUnauthorized: false,
+        timeout: timeout,
+      },
+    });
+    
+    try {
+      // Use undici fetch with custom dispatcher to disable SSL verification
+      const response = await undiciFetch(url, {
+        ...init,
+        dispatcher: timeoutAgent,
+        signal: init?.signal || controller.signal,
+      } as any);
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError' || error.code === 'UND_ERR_CONNECT_TIMEOUT') {
+        throw new Error(`Connection timeout after ${timeout}ms`);
+      }
+      throw error;
+    }
   }
   // Fallback to undici fetch for non-HTTPS URLs (for consistency)
-  return undiciFetch(url, init as any);
+  try {
+    const response = await undiciFetch(url, {
+      ...init,
+      signal: init?.signal || controller.signal,
+    } as any);
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError' || error.code === 'UND_ERR_CONNECT_TIMEOUT') {
+      throw new Error(`Connection timeout after ${timeout}ms`);
+    }
+    throw error;
+  }
 }
 
 export interface FortiGateDevice {

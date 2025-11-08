@@ -12,31 +12,82 @@ import { ChartContainer } from '@/components/ui/chart';
 import { TrendingDown, TrendingUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { RadialBar, RadialBarChart } from 'recharts';
+import { getDeviceHealthAction } from '@/app/actions';
 
 export function SecurityPosture() {
   const [score, setScore] = useState(86);
-  const [trend, setTrend] = useState<'up' | 'down' | 'stable'>('up');
-  const [change, setChange] = useState(5);
+  const [trend, setTrend] = useState<'up' | 'down' | 'stable'>('stable');
+  const [change, setChange] = useState(0);
+  const [prevScore, setPrevScore] = useState(86);
+
+  const calculateSecurityScore = (devices: any[]) => {
+    if (devices.length === 0) {
+      return 0; // No devices = no security
+    }
+
+    let totalScore = 0;
+    let deviceCount = 0;
+
+    devices.forEach((device) => {
+      deviceCount++;
+      if (device.status === 'Online') {
+        totalScore += 100; // Online device = 100 points
+      } else if (device.status === 'Warning') {
+        totalScore += 60; // Warning device = 60 points
+      } else {
+        totalScore += 0; // Offline device = 0 points
+      }
+    });
+
+    // Average score across all devices
+    const avgScore = deviceCount > 0 ? totalScore / deviceCount : 0;
+    
+    // Round to nearest integer
+    return Math.round(avgScore);
+  };
+
+  const fetchSecurityPosture = async () => {
+    try {
+      const result = await getDeviceHealthAction();
+      
+      if (result.success && result.devices) {
+        const newScore = calculateSecurityScore(result.devices);
+        const oldScore = score;
+        
+        setPrevScore(oldScore);
+        setScore(newScore);
+        
+        // Determine trend
+        if (newScore > oldScore) {
+          setTrend('up');
+          setChange(newScore - oldScore);
+        } else if (newScore < oldScore) {
+          setTrend('down');
+          setChange(oldScore - newScore);
+        } else {
+          setTrend('stable');
+          setChange(0);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching security posture:', err);
+    }
+  };
 
   useEffect(() => {
-    const interval = setInterval(() => {
-        setScore(prevScore => {
-            const changePercentage = (Math.random() - 0.4) * 5; // Fluctuate between ~ -2 to +3
-            let newScore = prevScore + changePercentage;
-            newScore = Math.max(0, Math.min(100, newScore)); // Clamp between 0 and 100
-
-            setTrend(newScore > prevScore ? 'up' : 'down');
-            setChange(Math.abs(newScore - prevScore));
-
-            return newScore;
-        });
-    }, 7000); // Update every 7 seconds
-
+    // Fetch immediately
+    fetchSecurityPosture();
+    
+    // Then fetch every 30 seconds
+    const interval = setInterval(fetchSecurityPosture, 30000);
+    
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const chartData = [{ score }];
   const trendIsUp = trend === 'up';
+  const trendIsDown = trend === 'down';
 
   return (
     <Card className="flex flex-col">
@@ -91,15 +142,16 @@ export function SecurityPosture() {
       </CardContent>
       <CardFooter className="flex-col gap-1 text-sm pt-4">
         <div className="flex items-center gap-2 font-medium leading-none">
-          Posture {trendIsUp ? 'improving' : 'declining'} 
-          {trendIsUp ? (
-            <TrendingUp className="h-4 w-4 text-accent" />
-          ) : (
-            <TrendingDown className="h-4 w-4 text-destructive" />
-          )}
+          {trendIsUp && 'Posture improving'}
+          {trendIsDown && 'Posture declining'}
+          {trend === 'stable' && 'Posture stable'}
+          {trendIsUp && <TrendingUp className="h-4 w-4 text-accent" />}
+          {trendIsDown && <TrendingDown className="h-4 w-4 text-destructive" />}
         </div>
         <div className="leading-none text-muted-foreground">
-          {trendIsUp ? 'Up' : 'Down'} {change.toFixed(1)}% from last check.
+          {trendIsUp && `Up ${change} points from last check.`}
+          {trendIsDown && `Down ${change} points from last check.`}
+          {trend === 'stable' && 'No change from last check.'}
         </div>
       </CardFooter>
     </Card>
