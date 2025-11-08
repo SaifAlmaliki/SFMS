@@ -7,6 +7,15 @@ import { FortiGateBaseClient, FortiGateRequestOptions } from './base-client';
 
 export class FortiGateSystemClient extends FortiGateBaseClient {
   /**
+   * Get system status (metadata: serial, version, build)
+   * Note: This returns metadata with empty results object
+   * For runtime status, use monitor.getSystemStatus()
+   */
+  async getSystemStatus(options?: FortiGateRequestOptions): Promise<any> {
+    return this.get('/api/v2/cmdb/system/status', options);
+  }
+
+  /**
    * Get or update global FortiGate settings
    */
   async getGlobal(options?: FortiGateRequestOptions): Promise<any> {
@@ -274,6 +283,22 @@ export class FortiGateSystemClient extends FortiGateBaseClient {
 
   async createRemoteCertificate(data: any, options?: FortiGateRequestOptions): Promise<any> {
     return this.post('/api/v2/cmdb/system/certificate/remote', data, options);
+  }
+
+  /**
+   * Upload remote CA certificate (file upload)
+   */
+  async uploadRemoteCertificate(
+    certificate: File | Blob,
+    name?: string,
+    options?: FortiGateRequestOptions
+  ): Promise<any> {
+    const formData = new FormData();
+    formData.append('certificate', certificate);
+    if (name) {
+      formData.append('name', name);
+    }
+    return this.uploadFile('/api/v2/cmdb/system/certificate/remote', formData, options);
   }
 
   async deleteRemoteCertificate(name: string, options?: FortiGateRequestOptions): Promise<any> {
