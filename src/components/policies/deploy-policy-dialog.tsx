@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { getDevicesSync, type Policy } from '@/lib/data';
-import { deployPolicy } from '@/lib/deployment';
+import { deployPolicyAction } from '@/app/actions';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
@@ -67,11 +67,15 @@ export function DeployPolicyDialog({ policy, children, disabled }: { policy: Pol
       
       try {
         // Deploy policy to this device
-        await deployPolicy({
+        const result = await deployPolicyAction({
           policyId: policy.id,
           deployedBy: 'user', // TODO: Get actual user from auth
           targetDevice: device.name,
         });
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Deployment failed');
+        }
         
         // Update status to Synced
         updatedDeployments[index] = { ...device, status: 'Synced' };

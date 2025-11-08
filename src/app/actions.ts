@@ -15,6 +15,7 @@ import { emulateAdversary } from '@/ai/flows/emulate-adversary';
 import { createIncident } from '@/ai/flows/create-incident';
 import { FortiGateClient, FortiGateDevice } from '@/lib/fortigate';
 import { PrismaClient } from '@/generated/prisma';
+import { deployPolicy, type DeploymentRequest } from '@/lib/deployment';
 
 const prisma = new PrismaClient();
 
@@ -737,4 +738,23 @@ export async function saveFortiGateDevice(input: z.infer<typeof saveDeviceSchema
   }
 }
 
-     
+/**
+ * Deploy policy to firewall device
+ */
+export async function deployPolicyAction(request: DeploymentRequest) {
+  try {
+    const deploymentId = await deployPolicy(request);
+    return {
+      success: true,
+      deploymentId,
+    };
+  } catch (e) {
+    console.error('Failed to deploy policy:', e);
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'Unknown error occurred',
+    };
+  }
+}
+
+      

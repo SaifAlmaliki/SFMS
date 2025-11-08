@@ -1,5 +1,8 @@
 /**
  * Deployment utilities for firewall policy deployment with FortiGate support
+ * 
+ * NOTE: This file is server-only and should only be imported in server actions or API routes
+ * It uses Prisma and FortiGate client which are server-only dependencies
  */
 
 import { PrismaClient } from '../generated/prisma';
