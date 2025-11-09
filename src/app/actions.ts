@@ -928,4 +928,460 @@ export async function getDeviceHealthAction() {
   }
 }
 
+/**
+ * Get system status for all FortiGate devices
+ */
+export async function getSystemStatusAction() {
+  try {
+    const { PrismaClient } = await import('../generated/prisma');
+    const prisma = new PrismaClient();
+
+    const devices = await prisma.device.findMany({
+      where: {
+        vendor: 'fortigate',
+        status: 'Active',
+      },
+    });
+
+    const statusData = await Promise.allSettled(
+      devices.map(async (device) => {
+        if (!device.apiKey) {
+          return {
+            deviceName: device.name,
+            success: false,
+            error: 'API key not configured',
+          };
+        }
+
+        try {
+          const fortigateDevice: FortiGateDevice = {
+            id: device.id,
+            name: device.name,
+            ip: device.ip,
+            apiKey: device.apiKey,
+            version: device.version || undefined,
+          };
+
+          const client = new FortiGateClient(fortigateDevice);
+          const result = await client.monitor.getSystemStatus();
+
+          if (result.success && result.data) {
+            return {
+              deviceName: device.name,
+              success: true,
+              data: {
+                hostname: result.data.hostname || device.name,
+                version: result.data.version || device.version || 'Unknown',
+                serial: result.data.serial || result.serial,
+                uptime: result.data.uptime || 0,
+                model: result.data.model || 'Unknown',
+              },
+            };
+          }
+
+          return {
+            deviceName: device.name,
+            success: false,
+            error: result.error || 'Failed to fetch system status',
+          };
+        } catch (error: any) {
+          return {
+            deviceName: device.name,
+            success: false,
+            error: error.message || 'Unknown error',
+          };
+        }
+      })
+    );
+
+    const results = statusData.map((result) =>
+      result.status === 'fulfilled' ? result.value : {
+        deviceName: 'Unknown',
+        success: false,
+        error: 'Promise rejected',
+      }
+    );
+
+    return {
+      success: true,
+      devices: results,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Failed to fetch system status',
+      devices: [],
+    };
+  }
+}
+
+/**
+ * Get resource usage for all FortiGate devices
+ */
+export async function getResourceUsageAction() {
+  try {
+    const { PrismaClient } = await import('../generated/prisma');
+    const prisma = new PrismaClient();
+
+    const devices = await prisma.device.findMany({
+      where: {
+        vendor: 'fortigate',
+        status: 'Active',
+      },
+    });
+
+    const resourceData = await Promise.allSettled(
+      devices.map(async (device) => {
+        if (!device.apiKey) {
+          return {
+            deviceName: device.name,
+            success: false,
+            error: 'API key not configured',
+          };
+        }
+
+        try {
+          const fortigateDevice: FortiGateDevice = {
+            id: device.id,
+            name: device.name,
+            ip: device.ip,
+            apiKey: device.apiKey,
+            version: device.version || undefined,
+          };
+
+          const client = new FortiGateClient(fortigateDevice);
+          const result = await client.monitor.getResourceUsage();
+
+          if (result.success && result.data) {
+            const data = result.data;
+            // Handle different response formats
+            const cpu = data.cpu?.usage ?? data.cpu_usage ?? data.cpu ?? 0;
+            const memory = data.memory?.usage ?? data.mem_usage ?? data.memory ?? 0;
+            const disk = data.disk?.usage ?? data.disk_usage ?? data.disk ?? 0;
+
+            return {
+              deviceName: device.name,
+              success: true,
+              data: {
+                cpu: typeof cpu === 'number' ? cpu : 0,
+                memory: typeof memory === 'number' ? memory : 0,
+                disk: typeof disk === 'number' ? disk : 0,
+              },
+            };
+          }
+
+          return {
+            deviceName: device.name,
+            success: false,
+            error: result.error || 'Failed to fetch resource usage',
+          };
+        } catch (error: any) {
+          return {
+            deviceName: device.name,
+            success: false,
+            error: error.message || 'Unknown error',
+          };
+        }
+      })
+    );
+
+    const results = resourceData.map((result) =>
+      result.status === 'fulfilled' ? result.value : {
+        deviceName: 'Unknown',
+        success: false,
+        error: 'Promise rejected',
+      }
+    );
+
+    return {
+      success: true,
+      devices: results,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Failed to fetch resource usage',
+      devices: [],
+    };
+  }
+}
+
+/**
+ * Get active firewall sessions for all FortiGate devices
+ */
+export async function getActiveSessionsAction() {
+  try {
+    const { PrismaClient } = await import('../generated/prisma');
+    const prisma = new PrismaClient();
+
+    const devices = await prisma.device.findMany({
+      where: {
+        vendor: 'fortigate',
+        status: 'Active',
+      },
+    });
+
+    const sessionData = await Promise.allSettled(
+      devices.map(async (device) => {
+        if (!device.apiKey) {
+          return {
+            deviceName: device.name,
+            success: false,
+            error: 'API key not configured',
+          };
+        }
+
+        try {
+          const fortigateDevice: FortiGateDevice = {
+            id: device.id,
+            name: device.name,
+            ip: device.ip,
+            apiKey: device.apiKey,
+            version: device.version || undefined,
+          };
+
+          const client = new FortiGateClient(fortigateDevice);
+          const result = await client.monitor.getFirewallSessions();
+
+          if (result.success && result.data) {
+            const data = result.data;
+            // Handle different response formats
+            const total = data.total ?? data.session_count ?? data.count ?? 0;
+            const tcp = data.tcp ?? data.tcp_count ?? 0;
+            const udp = data.udp ?? data.udp_count ?? 0;
+
+            return {
+              deviceName: device.name,
+              success: true,
+              data: {
+                total: typeof total === 'number' ? total : 0,
+                tcp: typeof tcp === 'number' ? tcp : 0,
+                udp: typeof udp === 'number' ? udp : 0,
+              },
+            };
+          }
+
+          return {
+            deviceName: device.name,
+            success: false,
+            error: result.error || 'Failed to fetch sessions',
+          };
+        } catch (error: any) {
+          return {
+            deviceName: device.name,
+            success: false,
+            error: error.message || 'Unknown error',
+          };
+        }
+      })
+    );
+
+    const results = sessionData.map((result) =>
+      result.status === 'fulfilled' ? result.value : {
+        deviceName: 'Unknown',
+        success: false,
+        error: 'Promise rejected',
+      }
+    );
+
+    return {
+      success: true,
+      devices: results,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Failed to fetch active sessions',
+      devices: [],
+    };
+  }
+}
+
+/**
+ * Get interface statistics for all FortiGate devices
+ */
+export async function getInterfaceStatsAction() {
+  try {
+    const { PrismaClient } = await import('../generated/prisma');
+    const prisma = new PrismaClient();
+
+    const devices = await prisma.device.findMany({
+      where: {
+        vendor: 'fortigate',
+        status: 'Active',
+      },
+    });
+
+    const interfaceData = await Promise.allSettled(
+      devices.map(async (device) => {
+        if (!device.apiKey) {
+          return {
+            deviceName: device.name,
+            success: false,
+            error: 'API key not configured',
+          };
+        }
+
+        try {
+          const fortigateDevice: FortiGateDevice = {
+            id: device.id,
+            name: device.name,
+            ip: device.ip,
+            apiKey: device.apiKey,
+            version: device.version || undefined,
+          };
+
+          const client = new FortiGateClient(fortigateDevice);
+          const result = await client.monitor.getInterfaceStats();
+
+          if (result.success && result.data) {
+            const interfaces = Array.isArray(result.data) 
+              ? result.data 
+              : (result.data.results || result.data.interfaces || []);
+
+            return {
+              deviceName: device.name,
+              success: true,
+              data: {
+                interfaces: interfaces.map((iface: any) => ({
+                  name: iface.name || iface.interface || 'Unknown',
+                  status: iface.status || iface.link || 'down',
+                  rxBytes: iface.rx_bytes ?? iface.rxBytes ?? 0,
+                  txBytes: iface.tx_bytes ?? iface.txBytes ?? 0,
+                  rxPackets: iface.rx_packets ?? iface.rxPackets ?? 0,
+                  txPackets: iface.tx_packets ?? iface.txPackets ?? 0,
+                  speed: iface.speed || 0,
+                })),
+              },
+            };
+          }
+
+          return {
+            deviceName: device.name,
+            success: false,
+            error: result.error || 'Failed to fetch interface stats',
+          };
+        } catch (error: any) {
+          return {
+            deviceName: device.name,
+            success: false,
+            error: error.message || 'Unknown error',
+          };
+        }
+      })
+    );
+
+    const results = interfaceData.map((result) =>
+      result.status === 'fulfilled' ? result.value : {
+        deviceName: 'Unknown',
+        success: false,
+        error: 'Promise rejected',
+      }
+    );
+
+    return {
+      success: true,
+      devices: results,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Failed to fetch interface stats',
+      devices: [],
+    };
+  }
+}
+
+/**
+ * Get license status for all FortiGate devices
+ */
+export async function getLicenseStatusAction() {
+  try {
+    const { PrismaClient } = await import('../generated/prisma');
+    const prisma = new PrismaClient();
+
+    const devices = await prisma.device.findMany({
+      where: {
+        vendor: 'fortigate',
+        status: 'Active',
+      },
+    });
+
+    const licenseData = await Promise.allSettled(
+      devices.map(async (device) => {
+        if (!device.apiKey) {
+          return {
+            deviceName: device.name,
+            success: false,
+            error: 'API key not configured',
+          };
+        }
+
+        try {
+          const fortigateDevice: FortiGateDevice = {
+            id: device.id,
+            name: device.name,
+            ip: device.ip,
+            apiKey: device.apiKey,
+            version: device.version || undefined,
+          };
+
+          const client = new FortiGateClient(fortigateDevice);
+          const result = await client.monitor.getLicenseStatus();
+
+          if (result.success && result.data) {
+            const data = result.data;
+            const status = data.status || data.license_status || 'Unknown';
+            const expiry = data.expiry || data.expiry_date || null;
+            const contract = data.contract || data.contract_number || null;
+
+            return {
+              deviceName: device.name,
+              success: true,
+              data: {
+                status,
+                expiry,
+                contract,
+                vmQuota: data.vm_quota ?? data.vmQuota ?? null,
+                vmUsed: data.vm_used ?? data.vmUsed ?? null,
+              },
+            };
+          }
+
+          return {
+            deviceName: device.name,
+            success: false,
+            error: result.error || 'Failed to fetch license status',
+          };
+        } catch (error: any) {
+          return {
+            deviceName: device.name,
+            success: false,
+            error: error.message || 'Unknown error',
+          };
+        }
+      })
+    );
+
+    const results = licenseData.map((result) =>
+      result.status === 'fulfilled' ? result.value : {
+        deviceName: 'Unknown',
+        success: false,
+        error: 'Promise rejected',
+      }
+    );
+
+    return {
+      success: true,
+      devices: results,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Failed to fetch license status',
+      devices: [],
+    };
+  }
+}
+
       
