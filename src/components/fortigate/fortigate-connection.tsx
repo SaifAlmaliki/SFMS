@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -12,8 +12,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, CheckCircle2, XCircle, Server, Key, Globe } from 'lucide-react';
-import { testFortiGateConnection, saveFortiGateDevice } from '@/app/actions';
+import { Loader2, CheckCircle2, XCircle, Server, Key, Globe, Eye, EyeOff } from 'lucide-react';
+import { testFortiGateConnection, saveFortiGateDevice, getFortiGateDevice } from '@/app/actions';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 
@@ -29,19 +29,60 @@ interface ConnectionStatus {
   serial?: string;
   version?: string;
   build?: number;
+  saved?: boolean;
 }
 
 export function FortiGateConnection() {
   const { toast } = useToast();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showApiKey, setShowApiKey] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null);
   const [formData, setFormData] = useState({
-    hostname: 'apiprod.viewdns.net',
-    apiUsername: 'aiprod',
-    apiKey: 'nQdNQqy79m8Qwn4dc1h8fQsfNkbhtH',
-    deviceName: 'apiprod-01',
+    hostname: '',
+    apiUsername: '',
+    apiKey: '',
+    deviceName: '',
   });
+
+  // Load saved device data on mount
+  useEffect(() => {
+    const loadSavedDevice = async () => {
+      try {
+        const result = await getFortiGateDevice();
+        if (result.success && result.device) {
+          setFormData({
+            hostname: result.device.hostname || '',
+            apiUsername: result.device.apiUsername || '',
+            apiKey: result.device.apiKey || '',
+            deviceName: result.device.name || '',
+          });
+        } else {
+          // Set default values if no device found
+          setFormData({
+            hostname: 'apiprod.viewdns.net',
+            apiUsername: 'aiprod',
+            apiKey: '',
+            deviceName: 'apiprod-01',
+          });
+        }
+      } catch (error) {
+        console.error('Error loading saved device:', error);
+        // Set default values on error
+        setFormData({
+          hostname: 'apiprod.viewdns.net',
+          apiUsername: 'aiprod',
+          apiKey: '',
+          deviceName: 'apiprod-01',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadSavedDevice();
+  }, []);
 
   const handleTestConnection = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,15 +94,31 @@ export function FortiGateConnection() {
         hostname: formData.hostname,
         apiUsername: formData.apiUsername,
         apiKey: formData.apiKey,
+        deviceName: formData.deviceName, // Pass device name for auto-save
       });
 
       setConnectionStatus(result);
       
       if (result.success) {
+        const savedMessage = result.saved 
+          ? ' Credentials have been saved to the database.' 
+          : '';
         toast({
           title: 'Connection Successful',
-          description: `Connected to FortiGate ${result.version || ''} (Serial: ${result.serial || 'N/A'})`,
+          description: `Connected to FortiGate ${result.version || ''} (Serial: ${result.serial || 'N/A'})${savedMessage}`,
         });
+        
+        // Reload saved device data after successful save to show updated credentials
+        if (result.saved) {
+          const savedDevice = await getFortiGateDevice(formData.deviceName);
+          if (savedDevice.success && savedDevice.device) {
+            setFormData(prev => ({
+              ...prev,
+              apiUsername: savedDevice.device!.apiUsername || prev.apiUsername,
+              apiKey: savedDevice.device!.apiKey || prev.apiKey,
+            }));
+          }
+        }
       } else {
         toast({
           title: 'Connection Failed',
@@ -111,6 +168,16 @@ export function FortiGateConnection() {
           title: 'Device Saved',
           description: `FortiGate device "${formData.deviceName}" has been saved successfully`,
         });
+        
+        // Reload saved device data to ensure form shows the saved credentials
+        const savedDevice = await getFortiGateDevice(formData.deviceName);
+        if (savedDevice.success && savedDevice.device) {
+          setFormData(prev => ({
+            ...prev,
+            apiUsername: savedDevice.device!.apiUsername || prev.apiUsername,
+            apiKey: savedDevice.device!.apiKey || prev.apiKey,
+          }));
+        }
       } else {
         toast({
           title: 'Save Failed',
@@ -141,6 +208,12 @@ export function FortiGateConnection() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-sm text-muted-foreground">Loading saved device...</span>
+          </div>
+        ) : (
         <form onSubmit={handleTestConnection} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="hostname" className="flex items-center gap-2">
@@ -176,15 +249,30 @@ export function FortiGateConnection() {
               <Key className="h-4 w-4" />
               API Key
             </Label>
-            <Input
-              id="apiKey"
-              name="apiKey"
-              type="password"
-              placeholder="Enter your API key"
-              value={formData.apiKey}
-              onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
-              required
-            />
+            <div className="relative">
+              <Input
+                id="apiKey"
+                name="apiKey"
+                type={showApiKey ? "text" : "password"}
+                placeholder="Enter your API key"
+                value={formData.apiKey}
+                onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                required
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiKey(!showApiKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label={showApiKey ? "Hide API key" : "Show API key"}
+              >
+                {showApiKey ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -214,6 +302,7 @@ export function FortiGateConnection() {
             )}
           </Button>
         </form>
+        )}
 
         {connectionStatus && (
           <>

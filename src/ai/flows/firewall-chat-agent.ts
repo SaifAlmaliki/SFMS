@@ -11,6 +11,9 @@ import { PolicyRequestParser } from '@/lib/policy-parser';
 import { PolicyMatcherService } from '@/lib/policy-matcher';
 import { classifyTicket, type TicketClassification } from '@/lib/ticket-classifier';
 import { searchKnowledgeBase } from '@/lib/knowledge-base-service';
+import { FortiGateClient, FortiGateDevice } from '@/lib/fortigate';
+import { convertFortiGateToPolicy } from '@/lib/fortigate-policy-converter';
+import { checkFortiGateAvailability } from '@/lib/fortigate-availability';
 
 const prisma = new PrismaClient();
 
@@ -395,15 +398,104 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
   }
 
   // Check if user wants to list policies
+  let fortigateConnectionError: string | null = null;
   if (shouldListPolicies) {
     try {
-      policiesList = await prisma.policy.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: 50, // Limit to 50 most recent policies
-      });
-    } catch (error) {
+      // Use availability checker utility to verify firewall connection
+      const availability = await checkFortiGateAvailability();
+      
+      if (!availability.available) {
+        policiesList = [];
+        fortigateConnectionError = availability.error || 'NO_DEVICES';
+      } else {
+        // Firewall is available, now fetch policies
+        const fortigateDevices = await prisma.device.findMany({
+          where: {
+            vendor: 'fortigate',
+            status: 'Active',
+          },
+        });
+
+        let fetchedFromFortiGate = false;
+        let connectionError: string | null = null;
+        
+        // Try to fetch from the available device first, then try others if needed
+        // Prioritize the device that passed availability check
+        const sortedDevices = fortigateDevices.sort((a, b) => {
+          if (a.name === availability.deviceName) return -1;
+          if (b.name === availability.deviceName) return 1;
+          return 0;
+        });
+        
+        for (const device of sortedDevices) {
+          if (device.apiKey) {
+            try {
+              const fortigateDevice: FortiGateDevice = {
+                id: device.id,
+                name: device.name,
+                ip: device.ip,
+                apiKey: device.apiKey,
+                version: device.version || undefined,
+              };
+
+              const client = new FortiGateClient(fortigateDevice);
+              const policiesResult = await client.firewall.getPolicies();
+              
+              if (policiesResult.success && policiesResult.data) {
+                // Convert FortiGate policies to database format
+                let fortigatePolicies: any[] = [];
+                
+                if (Array.isArray(policiesResult.data)) {
+                  fortigatePolicies = policiesResult.data;
+                } else if (policiesResult.data && typeof policiesResult.data === 'object') {
+                  if (Array.isArray(policiesResult.data.results)) {
+                    fortigatePolicies = policiesResult.data.results;
+                  } else if (policiesResult.data.results && typeof policiesResult.data.results === 'object') {
+                    if (policiesResult.data.results.policyid !== undefined) {
+                      fortigatePolicies = [policiesResult.data.results];
+                    } else {
+                      fortigatePolicies = Object.values(policiesResult.data.results);
+                    }
+                  }
+                }
+
+                // Convert each FortiGate policy to database format
+                policiesList = fortigatePolicies.map((fgPolicy) => {
+                  const policyData = convertFortiGateToPolicy(fgPolicy, device.name);
+                  return {
+                    ...policyData,
+                    id: `POL-FG-${fgPolicy.policyid || Date.now()}`,
+                    vendor: 'fortigate',
+                    vendorId: fgPolicy.policyid?.toString(),
+                    targetDevice: device.name,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                  };
+                });
+                
+                fetchedFromFortiGate = true;
+                break; // Use first successful device
+              } else {
+                connectionError = policiesResult.error || 'Failed to fetch policies from FortiGate';
+              }
+            } catch (error: any) {
+              console.error(`Error fetching policies from FortiGate device ${device.name}:`, error);
+              connectionError = `Error fetching policies from ${device.name}: ${error.message}`;
+              // Continue to next device
+            }
+          }
+        }
+
+        // If policy fetch failed even though connection test passed
+        if (!fetchedFromFortiGate) {
+          policiesList = [];
+          fortigateConnectionError = connectionError || 'Failed to fetch policies from FortiGate';
+        }
+      }
+    } catch (error: any) {
       console.error('Error fetching policies:', error);
       policiesList = [];
+      fortigateConnectionError = `Error: ${error.message}`;
     }
   }
 
@@ -490,13 +582,20 @@ RESPONSE REQUIRED: Acknowledge the request and inform the user that a ticket has
   }
 
   // Add policy list context if user requested it
-  if (shouldListPolicies) {
-    if (policiesList.length > 0) {
-      systemContext += `\n\nIMPORTANT: The user is asking to view/list existing policies. Here are ALL the policies from the database with FULL DETAILS:\n\n${formatPoliciesList(policiesList)}\n\nRESPONSE REQUIRED: Format your response with clear sections. Start with the summary, then list each policy with clear spacing between policies. Use proper line breaks and formatting so each policy is easily readable. Include ALL details for each policy: Policy ID, Name, Source, Destination:Port, Action, Status, Vendor, Requested By, Business Justification, and Created date. Make sure to use line breaks (\n) between policies so the response is well-formatted and easy to read.`;
-    } else {
-      systemContext += `\n\nIMPORTANT: The user is asking to view existing policies, but no policies were found in the database.\n\nRESPONSE REQUIRED: Inform the user that no policies are currently in the database and offer to help create one.`;
-    }
-  } else if (hasValidPolicyData && parsedRequest) {
+    if (shouldListPolicies) {
+      // Check for FortiGate connection errors first
+      if (fortigateConnectionError) {
+        if (fortigateConnectionError === 'NO_DEVICES') {
+          systemContext += `\n\nIMPORTANT: The user is asking to list policies, but NO FORTIGATE DEVICES ARE CONFIGURED.\n\nRESPONSE REQUIRED: Inform the user clearly with a warning emoji (⚠️) that no FortiGate firewall devices are connected. Provide clear instructions:\n1. Go to Settings page\n2. Navigate to Device Management section\n3. Enter FortiGate device credentials (Hostname/IP, API Username, API Key)\n4. Test the connection and save the device\n\nExplain that once connected, they can list policies directly from the FortiGate firewall. Do NOT show database policies as they may be outdated.`;
+        } else {
+          systemContext += `\n\nIMPORTANT: The user is asking to list policies, but FORTIGATE CONNECTION FAILED.\n\nERROR: ${fortigateConnectionError}\n\nRESPONSE REQUIRED: Inform the user clearly with a warning emoji (⚠️) that the FortiGate firewall connection failed. Show the specific error message. Provide troubleshooting steps:\n1. Go to Settings → Device Management\n2. Verify FortiGate credentials are correct\n3. Test the connection\n4. Ensure firewall is reachable and API access is enabled\n\nExplain that you cannot show policies from the database as they may be outdated. The user must connect to their FortiGate firewall to view current policies.`;
+        }
+      } else if (policiesList.length > 0) {
+        systemContext += `\n\nIMPORTANT: The user is asking to view/list existing policies. Here are ALL the policies from the FORTIGATE FIREWALL with FULL DETAILS:\n\n${formatPoliciesList(policiesList)}\n\nRESPONSE REQUIRED: Format your response with clear sections. Start with the summary, then list each policy with clear spacing between policies. Use proper line breaks and formatting so each policy is easily readable. Include ALL details for each policy: Policy ID, Name, Source, Destination:Port, Action, Status, Vendor, Requested By, Business Justification, and Created date. Make sure to use line breaks (\n) between policies so the response is well-formatted and easy to read.`;
+      } else {
+        systemContext += `\n\nIMPORTANT: The user is asking to view existing policies from FortiGate firewall, but no policies were found.\n\nRESPONSE REQUIRED: Inform the user that no policies are currently configured on the FortiGate firewall and offer to help create one.`;
+      }
+    } else if (hasValidPolicyData && parsedRequest) {
     // User has a valid policy request (parsing succeeded) - check for duplicates FIRST
     if (duplicateFound && matchedPolicies && matchedPolicies.length > 0) {
       const firstPolicy = matchedPolicies[0];

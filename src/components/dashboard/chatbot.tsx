@@ -6,7 +6,7 @@ import { chatAction } from '@/app/actions';
 import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send, Bot, User, AlertTriangle, CheckCircle, ExternalLink } from 'lucide-react';
+import { Send, Bot, User, AlertTriangle, CheckCircle, ExternalLink, Shield, Ban, HelpCircle, Search } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -402,9 +402,24 @@ export function Chatbot() {
                 input.focus();
               }
             }}
-            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors"
+            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors flex items-center gap-1.5"
           >
-            💡 Create Policy
+            <Shield className="h-3.5 w-3.5" />
+            Create Policy
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const input = formRef.current?.querySelector('input[name="query"]') as HTMLInputElement;
+              if (input) {
+                input.value = "Block 192.168.1.100 from accessing 10.0.0.5 on port 80";
+                input.focus();
+              }
+            }}
+            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors flex items-center gap-1.5"
+          >
+            <Ban className="h-3.5 w-3.5" />
+            Block Traffic
           </button>
           <button
             type="button"
@@ -415,29 +430,45 @@ export function Chatbot() {
                 input.focus();
               }
             }}
-            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors"
+            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors flex items-center gap-1.5"
           >
-            📋 List Policies
+            <Search className="h-3.5 w-3.5" />
+            List Policies
           </button>
           <button
             type="button"
             onClick={() => {
               const input = formRef.current?.querySelector('input[name="query"]') as HTMLInputElement;
               if (input) {
-                input.value = "List all configured policies";
+                input.value = "Show me policies with status Active";
                 input.focus();
               }
             }}
-            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors"
+            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors flex items-center gap-1.5"
           >
-            📊 All Policies
+            <CheckCircle className="h-3.5 w-3.5" />
+            Check Status
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const input = formRef.current?.querySelector('input[name="query"]') as HTMLInputElement;
+              if (input) {
+                input.value = "How do I configure firewall policies?";
+                input.focus();
+              }
+            }}
+            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors flex items-center gap-1.5"
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+            Help
           </button>
         </div>
         
         <form ref={formRef} action={handleFormSubmit} className="flex gap-2">
           <Input
             name="query"
-            placeholder='Try: "Allow 10.1.1.5 to 192.168.1.10:443" or "List all policies"...'
+            placeholder='Try: "Allow 10.1.1.5 to 192.168.1.10:443" or "What are the existing policies?"...'
             autoComplete="off"
             className="bg-card"
           />

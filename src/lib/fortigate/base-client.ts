@@ -51,7 +51,8 @@ async function fortigateFetch(url: string | URL, init?: RequestInit & { timeout?
     } catch (error: any) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError' || error.code === 'UND_ERR_CONNECT_TIMEOUT') {
-        throw new Error(`Connection timeout after ${timeout}ms`);
+        const timeoutSeconds = Math.round(timeout / 1000);
+        throw new Error(`Connection timeout after ${timeoutSeconds} seconds. The FortiGate firewall may be unreachable, the IP address may be incorrect, or the firewall may not be responding.`);
       }
       throw error;
     }
@@ -67,7 +68,8 @@ async function fortigateFetch(url: string | URL, init?: RequestInit & { timeout?
   } catch (error: any) {
     clearTimeout(timeoutId);
     if (error.name === 'AbortError' || error.code === 'UND_ERR_CONNECT_TIMEOUT') {
-      throw new Error(`Connection timeout after ${timeout}ms`);
+      const timeoutSeconds = Math.round(timeout / 1000);
+      throw new Error(`Connection timeout after ${timeoutSeconds} seconds. The FortiGate firewall may be unreachable, the IP address may be incorrect, or the firewall may not be responding.`);
     }
     throw error;
   }
@@ -160,6 +162,11 @@ export abstract class FortiGateBaseClient {
     const queryString = this.buildQueryString(options);
     const url = `${this.baseUrl}${endpoint}${queryString}`;
     
+    // Log request details for debugging (without exposing full API key)
+    const apiKeyPreview = this.device.apiKey ? `${this.device.apiKey.substring(0, 10)}...` : 'MISSING';
+    console.log(`[FortiGate API] GET ${url}`);
+    console.log(`[FortiGate API] Device: ${this.device.name} (${this.device.ip}), API Key: ${apiKeyPreview}`);
+    
     try {
       const response = await fortigateFetch(url, {
         method: 'GET',
@@ -167,6 +174,7 @@ export abstract class FortiGateBaseClient {
           'Authorization': `Bearer ${this.device.apiKey}`,
           'Content-Type': 'application/json',
         },
+        timeout: options?.timeout,
       });
 
       const data = await response.json().catch(() => ({}));
@@ -871,18 +879,19 @@ export abstract class FortiGateBaseClient {
   /**
    * Test connection to FortiGate device
    * Uses /api/v2/monitor/system/status which returns runtime status
+   * Uses shorter timeout (10 seconds) for faster failure detection
    */
   async testConnection(): Promise<FortiGateApiResponse> {
     try {
-      // Try monitor endpoint first (returns runtime status)
-      const monitorResponse = await this.get('/api/v2/monitor/system/status');
+      // Try monitor endpoint first (returns runtime status) with shorter timeout
+      const monitorResponse = await this.get('/api/v2/monitor/system/status', { timeout: 10000 });
       
       if (monitorResponse.success) {
         return monitorResponse;
       }
       
-      // Fallback to cmdb endpoint (returns metadata)
-      const cmdbResponse = await this.get('/api/v2/cmdb/system/status');
+      // Fallback to cmdb endpoint (returns metadata) with shorter timeout
+      const cmdbResponse = await this.get('/api/v2/cmdb/system/status', { timeout: 10000 });
       
       // For cmdb status endpoint, results is empty, so return metadata instead
       if (cmdbResponse.success && (!cmdbResponse.data || Object.keys(cmdbResponse.data).length === 0)) {

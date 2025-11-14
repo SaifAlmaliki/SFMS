@@ -78,6 +78,7 @@ model Device {
   vendor      String?  // 'fortigate', 'paloalto', 'cisco'
   model       String?  // Device model
   version     String?  // Firmware version
+  apiUsername String?  // API username for authentication
   apiKey      String?  // API key for authentication
   status      DeviceStatus @default(Active)
   lastSync    DateTime?

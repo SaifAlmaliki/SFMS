@@ -596,6 +596,7 @@ const fortigateConnectionSchema = z.object({
   hostname: z.string().min(1, 'Hostname is required'),
   apiUsername: z.string().min(1, 'API username is required'),
   apiKey: z.string().min(1, 'API key is required'),
+  deviceName: z.string().optional(), // Optional device name for auto-save
 });
 
 export async function testFortiGateConnection(input: z.infer<typeof fortigateConnectionSchema>) {
@@ -612,12 +613,55 @@ export async function testFortiGateConnection(input: z.infer<typeof fortigateCon
     const result = await client.testConnection();
 
     if (result.success) {
+      // Auto-save credentials if deviceName is provided
+      if (validated.deviceName) {
+        try {
+          // Check if device with same name or IP already exists
+          const existingDevice = await prisma.device.findFirst({
+            where: {
+              OR: [
+                { name: validated.deviceName },
+                { ip: validated.hostname },
+              ],
+            },
+          });
+
+          const deviceData = {
+            name: validated.deviceName,
+            ip: validated.hostname,
+            vendor: 'fortigate',
+            apiUsername: validated.apiUsername,
+            apiKey: validated.apiKey,
+            version: result.version,
+            status: 'Active' as const,
+            lastSync: new Date(),
+          };
+
+          if (existingDevice) {
+            // Update existing device
+            await prisma.device.update({
+              where: { id: existingDevice.id },
+              data: deviceData,
+            });
+          } else {
+            // Create new device
+            await prisma.device.create({
+              data: deviceData,
+            });
+          }
+        } catch (saveError) {
+          // Log save error but don't fail the connection test
+          console.error('Error auto-saving device credentials:', saveError);
+        }
+      }
+
       return {
         success: true,
         data: result.data,
         serial: result.serial,
         version: result.version,
         build: result.build,
+        saved: validated.deviceName ? true : false,
       };
     } else {
       // Log detailed error for debugging
@@ -657,6 +701,60 @@ export async function testFortiGateConnection(input: z.infer<typeof fortigateCon
 }
 
 /**
+ * Get saved FortiGate device configuration
+ */
+export async function getFortiGateDevice(deviceName?: string) {
+  try {
+    let device;
+    
+    if (deviceName) {
+      // Get specific device by name
+      device = await prisma.device.findFirst({
+        where: {
+          name: deviceName,
+          vendor: 'fortigate',
+        },
+      });
+    } else {
+      // Get first active FortiGate device
+      device = await prisma.device.findFirst({
+        where: {
+          vendor: 'fortigate',
+          status: 'Active',
+        },
+        orderBy: {
+          updatedAt: 'desc',
+        },
+      });
+    }
+
+    if (!device) {
+      return {
+        success: false,
+        error: 'No FortiGate device found',
+      };
+    }
+
+    return {
+      success: true,
+      device: {
+        name: device.name,
+        hostname: device.ip,
+        apiUsername: device.apiUsername || '',
+        apiKey: device.apiKey || '',
+        version: device.version,
+        status: device.status,
+      },
+    };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'Failed to get device configuration',
+    };
+  }
+}
+
+/**
  * Save FortiGate device configuration
  */
 const saveDeviceSchema = z.object({
@@ -691,6 +789,7 @@ export async function saveFortiGateDevice(input: z.infer<typeof saveDeviceSchema
           name: validated.name,
           ip: validated.hostname,
           vendor: 'fortigate',
+          apiUsername: validated.apiUsername,
           apiKey: validated.apiKey,
           version: validated.version,
           status: 'Active',
@@ -710,6 +809,7 @@ export async function saveFortiGateDevice(input: z.infer<typeof saveDeviceSchema
           name: validated.name,
           ip: validated.hostname,
           vendor: 'fortigate',
+          apiUsername: validated.apiUsername,
           apiKey: validated.apiKey,
           version: validated.version,
           status: 'Active',

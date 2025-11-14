@@ -6,7 +6,7 @@ import { chatAction } from '@/app/actions';
 import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send, Bot, User, AlertTriangle, CheckCircle, ExternalLink } from 'lucide-react';
+import { Send, Bot, User, AlertTriangle, CheckCircle, ExternalLink, Loader2, Shield, Ban, HelpCircle, Search } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -48,11 +48,17 @@ const initialState = {
   parsedRequest: null,
 };
 
-function SubmitButton() {
+function SubmitButton({ isLoading }: { isLoading: boolean }) {
   const { pending } = useFormStatus();
+  const isSubmitting = pending || isLoading;
+  
   return (
-    <Button type="submit" size="icon" disabled={pending}>
-      <Send />
+    <Button type="submit" size="icon" disabled={isSubmitting}>
+      {isSubmitting ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <Send />
+      )}
     </Button>
   );
 }
@@ -70,6 +76,7 @@ interface SimpleChatbotProps {
 export function SimpleChatbot({ initialQuery, templateId, templateContext }: SimpleChatbotProps = {}) {
   const [state, formAction] = useActionState(chatAction, initialState);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState('fortigate');
   const [selectedExternalSystem, setSelectedExternalSystem] = useState('');
   const [conversationId, setConversationId] = useState('');
@@ -92,6 +99,7 @@ export function SimpleChatbot({ initialQuery, templateId, templateContext }: Sim
 
   useEffect(() => {
     if (state?.response) {
+      setIsLoading(false);
       const botMessage: Message = {
         sender: 'bot',
         text: state.response,
@@ -116,6 +124,7 @@ export function SimpleChatbot({ initialQuery, templateId, templateContext }: Sim
       }
     }
     if (state?.error) {
+      setIsLoading(false);
       setMessages((prev) => [
         ...prev,
         { sender: 'bot', text: `Error: ${state.error}` },
@@ -129,12 +138,13 @@ export function SimpleChatbot({ initialQuery, templateId, templateContext }: Sim
     if (viewport) {
       viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
     }
-  }, [messages]);
+  }, [messages, isLoading]);
 
   const handleFormSubmit = (formData: FormData) => {
     const query = formData.get('query') as string;
     if (query.trim()) {
       setMessages((prev) => [...prev, { sender: 'user', text: query }]);
+      setIsLoading(true);
       
       // Add vendor and external system to form data
       formData.set('vendor', selectedVendor);
@@ -199,65 +209,6 @@ export function SimpleChatbot({ initialQuery, templateId, templateContext }: Sim
             <div className="flex flex-col h-[280px] items-center justify-center text-center text-muted-foreground px-4">
               <Bot className="h-12 w-12 mb-4" />
               <p className="font-medium mb-4">Ask me anything about your firewall configuration.</p>
-              
-              <div className="w-full max-w-md space-y-3">
-                <div className="text-left">
-                  <p className="text-xs font-semibold mb-2 text-foreground">Example queries:</p>
-                  
-                  <div className="space-y-2">
-                    <button
-                      onClick={() => {
-                        const exampleQuery = "Allow 10.1.1.5 to 192.168.1.10:443 for database access";
-                        const formData = new FormData();
-                        formData.set('query', exampleQuery);
-                        formData.set('vendor', selectedVendor);
-                        formData.set('externalSystem', selectedExternalSystem);
-                        formData.set('conversationId', conversationId);
-                        formData.set('userId', 'user-001');
-                        setMessages((prev) => [...prev, { sender: 'user', text: exampleQuery }]);
-                        formAction(formData);
-                      }}
-                      className="block w-full text-left px-3 py-2 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors"
-                    >
-                      💡 "Allow 10.1.1.5 to 192.168.1.10:443 for database access"
-                    </button>
-                    
-                    <button
-                      onClick={() => {
-                        const exampleQuery = "What are the existing policies?";
-                        const formData = new FormData();
-                        formData.set('query', exampleQuery);
-                        formData.set('vendor', selectedVendor);
-                        formData.set('externalSystem', selectedExternalSystem);
-                        formData.set('conversationId', conversationId);
-                        formData.set('userId', 'user-001');
-                        setMessages((prev) => [...prev, { sender: 'user', text: exampleQuery }]);
-                        formAction(formData);
-                      }}
-                      className="block w-full text-left px-3 py-2 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors"
-                    >
-                      📋 "What are the existing policies?"
-                    </button>
-                    
-                    <button
-                      onClick={() => {
-                        const exampleQuery = "List all configured policies";
-                        const formData = new FormData();
-                        formData.set('query', exampleQuery);
-                        formData.set('vendor', selectedVendor);
-                        formData.set('externalSystem', selectedExternalSystem);
-                        formData.set('conversationId', conversationId);
-                        formData.set('userId', 'user-001');
-                        setMessages((prev) => [...prev, { sender: 'user', text: exampleQuery }]);
-                        formAction(formData);
-                      }}
-                      className="block w-full text-left px-3 py-2 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors"
-                    >
-                      📊 "List all configured policies"
-                    </button>
-                  </div>
-                </div>
-              </div>
             </div>
           )}
           {messages.map((message, index) => (
@@ -375,6 +326,23 @@ export function SimpleChatbot({ initialQuery, templateId, templateContext }: Sim
               )}
             </div>
           ))}
+
+          {/* Loading Indicator */}
+          {isLoading && (
+            <div className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-2">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-primary text-primary-foreground">
+                  <Bot className="h-4 w-4" />
+                </AvatarFallback>
+              </Avatar>
+              <div className="rounded-lg p-3 text-sm bg-muted border border-border">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <span className="text-muted-foreground animate-pulse">Thinking...</span>
+                </div>
+              </div>
+            </div>
+          )}
           
         </div>
       </ScrollArea>
@@ -390,9 +358,24 @@ export function SimpleChatbot({ initialQuery, templateId, templateContext }: Sim
                 input.focus();
               }
             }}
-            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors"
+            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors flex items-center gap-1.5"
           >
-            💡 Create Policy
+            <Shield className="h-3.5 w-3.5" />
+            Create Policy
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const input = formRef.current?.querySelector('input[name="query"]') as HTMLInputElement;
+              if (input) {
+                input.value = "Block 192.168.1.100 from accessing 10.0.0.5 on port 80";
+                input.focus();
+              }
+            }}
+            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors flex items-center gap-1.5"
+          >
+            <Ban className="h-3.5 w-3.5" />
+            Block Traffic
           </button>
           <button
             type="button"
@@ -403,22 +386,38 @@ export function SimpleChatbot({ initialQuery, templateId, templateContext }: Sim
                 input.focus();
               }
             }}
-            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors"
+            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors flex items-center gap-1.5"
           >
-            📋 List Policies
+            <Search className="h-3.5 w-3.5" />
+            List Policies
           </button>
           <button
             type="button"
             onClick={() => {
               const input = formRef.current?.querySelector('input[name="query"]') as HTMLInputElement;
               if (input) {
-                input.value = "List all configured policies";
+                input.value = "Show me policies with status Active";
                 input.focus();
               }
             }}
-            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors"
+            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors flex items-center gap-1.5"
           >
-            📊 All Policies
+            <CheckCircle className="h-3.5 w-3.5" />
+            Check Status
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const input = formRef.current?.querySelector('input[name="query"]') as HTMLInputElement;
+              if (input) {
+                input.value = "How do I configure firewall policies?";
+                input.focus();
+              }
+            }}
+            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors flex items-center gap-1.5"
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+            Help
           </button>
         </div>
         
@@ -426,12 +425,12 @@ export function SimpleChatbot({ initialQuery, templateId, templateContext }: Sim
           <Input
             ref={inputRef}
             name="query"
-            placeholder={templateContext ? `Customize "${templateContext.name}" template...` : 'Try: "Allow 10.1.1.5 to 192.168.1.10:443" or "List all policies"...'}
+            placeholder={templateContext ? `Customize "${templateContext.name}" template...` : 'Try: "Allow 10.1.1.5 to 192.168.1.10:443" or "What are the existing policies?"...'}
             defaultValue={initialQuery}
             autoComplete="off"
             className="bg-card"
           />
-          <SubmitButton />
+          <SubmitButton isLoading={isLoading} />
         </form>
       </div>
     </div>

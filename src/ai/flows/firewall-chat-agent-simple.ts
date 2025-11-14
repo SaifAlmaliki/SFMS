@@ -6,6 +6,9 @@ import { PrismaClient } from '../../generated/prisma';
 import { PolicyRequestParser } from '@/lib/policy-parser';
 import { PolicyMatcherService } from '@/lib/policy-matcher';
 import { getVendorById, getDefaultVendor, convertToVendorFormat, validatePolicy, type FirewallVendor } from '@/lib/firewall-vendors';
+import { FortiGateClient, FortiGateDevice } from '@/lib/fortigate';
+import { convertFortiGateToPolicy } from '@/lib/fortigate-policy-converter';
+import { checkFortiGateAvailability, checkSpecificFortiGateDevice } from '@/lib/fortigate-availability';
 
 // Create a single Prisma instance
 let prisma: PrismaClient;
@@ -335,15 +338,104 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
     let policiesList: any[] = [];
 
     // Check if user wants to list policies
+    let fortigateConnectionError: string | null = null;
     if (shouldListPolicies) {
       try {
-        policiesList = await prisma.policy.findMany({
-          orderBy: { createdAt: 'desc' },
-          take: 50, // Limit to 50 most recent policies
-        });
-      } catch (error) {
+        // Use availability checker utility to verify firewall connection
+        const availability = await checkFortiGateAvailability();
+        
+        if (!availability.available) {
+          policiesList = [];
+          fortigateConnectionError = availability.error || 'NO_DEVICES';
+        } else {
+          // Firewall is available, now fetch policies
+          const fortigateDevices = await prisma.device.findMany({
+            where: {
+              vendor: 'fortigate',
+              status: 'Active',
+            },
+          });
+
+          let fetchedFromFortiGate = false;
+          let connectionError: string | null = null;
+          
+          // Try to fetch from the available device first, then try others if needed
+          // Prioritize the device that passed availability check
+          const sortedDevices = fortigateDevices.sort((a, b) => {
+            if (a.name === availability.deviceName) return -1;
+            if (b.name === availability.deviceName) return 1;
+            return 0;
+          });
+          
+          for (const device of sortedDevices) {
+            if (device.apiKey) {
+              try {
+                const fortigateDevice: FortiGateDevice = {
+                  id: device.id,
+                  name: device.name,
+                  ip: device.ip,
+                  apiKey: device.apiKey,
+                  version: device.version || undefined,
+                };
+
+                const client = new FortiGateClient(fortigateDevice);
+                const policiesResult = await client.firewall.getPolicies();
+                
+                if (policiesResult.success && policiesResult.data) {
+                  // Convert FortiGate policies to database format
+                  let fortigatePolicies: any[] = [];
+                  
+                  if (Array.isArray(policiesResult.data)) {
+                    fortigatePolicies = policiesResult.data;
+                  } else if (policiesResult.data && typeof policiesResult.data === 'object') {
+                    if (Array.isArray(policiesResult.data.results)) {
+                      fortigatePolicies = policiesResult.data.results;
+                    } else if (policiesResult.data.results && typeof policiesResult.data.results === 'object') {
+                      if (policiesResult.data.results.policyid !== undefined) {
+                        fortigatePolicies = [policiesResult.data.results];
+                      } else {
+                        fortigatePolicies = Object.values(policiesResult.data.results);
+                      }
+                    }
+                  }
+
+                  // Convert each FortiGate policy to database format
+                  policiesList = fortigatePolicies.map((fgPolicy) => {
+                    const policyData = convertFortiGateToPolicy(fgPolicy, device.name);
+                    return {
+                      ...policyData,
+                      id: `POL-FG-${fgPolicy.policyid || Date.now()}`,
+                      vendor: 'fortigate',
+                      vendorId: fgPolicy.policyid?.toString(),
+                      targetDevice: device.name,
+                      createdAt: new Date(),
+                      updatedAt: new Date(),
+                    };
+                  });
+                  
+                  fetchedFromFortiGate = true;
+                  break; // Use first successful device
+                } else {
+                  connectionError = policiesResult.error || 'Failed to fetch policies from FortiGate';
+                }
+              } catch (error: any) {
+                console.error(`Error fetching policies from FortiGate device ${device.name}:`, error);
+                connectionError = `Error fetching policies from ${device.name}: ${error.message}`;
+                // Continue to next device
+              }
+            }
+          }
+
+          // If policy fetch failed even though connection test passed
+          if (!fetchedFromFortiGate) {
+            policiesList = [];
+            fortigateConnectionError = connectionError || 'Failed to fetch policies from FortiGate';
+          }
+        }
+      } catch (error: any) {
         console.error('Error fetching policies:', error);
         policiesList = [];
+        fortigateConnectionError = `Error: ${error.message}`;
       }
     }
 
@@ -377,10 +469,17 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
     // Generate response
     let aiResponse: string;
     if (shouldListPolicies) {
-      if (policiesList.length > 0) {
+      // Check for FortiGate connection errors first
+      if (fortigateConnectionError) {
+        if (fortigateConnectionError === 'NO_DEVICES') {
+          aiResponse = '⚠️ **FortiGate Firewall Not Connected**\n\nNo active FortiGate devices are configured. To list policies from your firewall:\n\n1. Go to **Settings** page\n2. Navigate to **Device Management** section\n3. Enter your FortiGate device credentials (Hostname/IP, API Username, API Key)\n4. Test the connection and save the device\n\nOnce connected, you can list policies directly from your FortiGate firewall.';
+        } else {
+          aiResponse = `⚠️ **FortiGate Firewall Connection Failed**\n\nUnable to connect to your FortiGate firewall device.\n\n**Error:** ${fortigateConnectionError}\n\n**To resolve:**\n1. Go to **Settings** → **Device Management**\n2. Verify your FortiGate credentials are correct\n3. Test the connection\n4. Ensure the firewall is reachable and API access is enabled\n\nI cannot show policies from the database as they may be outdated. Please connect to your FortiGate firewall to view current policies.`;
+        }
+      } else if (policiesList.length > 0) {
         aiResponse = formatPoliciesList(policiesList);
       } else {
-        aiResponse = 'No policies found in the database. Would you like me to help you create a new policy?';
+        aiResponse = 'No policies found on the FortiGate firewall. Would you like me to help you create a new policy?';
       }
     } else {
       aiResponse = generateSimpleResponse(query, parsedRequest, duplicateFound, missingJustification, matchedPolicies);
