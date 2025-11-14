@@ -195,8 +195,79 @@ async function deployToFortiGate(deviceName: string, policy: Policy): Promise<{ 
     
     if (deployResult.success) {
       // Extract policy ID from FortiGate response
-      // FortiGate returns the policy in results, and policyid is usually in the response
-      const policyId = deployResult.data?.policyid || deployResult.data?.id || 'unknown';
+      // FortiGate API can return policy ID in different locations:
+      // 1. data.results.policyid (when creating, results contains the created policy)
+      // 2. data.policyid (direct)
+      // 3. data.id (alternative)
+      // 4. data.results[0].policyid (if results is an array)
+      let policyId: string | number | undefined;
+      
+      if (deployResult.data) {
+        // Try different response formats
+        if (deployResult.data.results) {
+          // Handle results object/array
+          if (Array.isArray(deployResult.data.results) && deployResult.data.results.length > 0) {
+            policyId = deployResult.data.results[0].policyid || deployResult.data.results[0].id;
+          } else if (deployResult.data.results.policyid !== undefined) {
+            policyId = deployResult.data.results.policyid;
+          } else if (deployResult.data.results.id !== undefined) {
+            policyId = deployResult.data.results.id;
+          }
+        }
+        
+        // Try direct access
+        if (!policyId) {
+          policyId = deployResult.data.policyid || deployResult.data.id;
+        }
+      }
+      
+      // If we still don't have a policy ID, try to fetch it by name
+      if (!policyId || policyId === 'unknown') {
+        console.warn('Policy ID not found in create response, attempting to fetch by name...');
+        try {
+          // Fetch all policies and find the one we just created by name
+          const policiesResult = await apiClient.firewall.getPolicies();
+          if (policiesResult.success && policiesResult.data) {
+            let allPolicies: any[] = [];
+            
+            // Handle different response formats
+            if (Array.isArray(policiesResult.data)) {
+              allPolicies = policiesResult.data;
+            } else if (policiesResult.data.results) {
+              if (Array.isArray(policiesResult.data.results)) {
+                allPolicies = policiesResult.data.results;
+              } else if (typeof policiesResult.data.results === 'object') {
+                allPolicies = Object.values(policiesResult.data.results);
+              }
+            }
+            
+            // Find the policy by name (most recently created should match)
+            const matchingPolicy = allPolicies.find((p: any) => 
+              p.name === fortigatePolicy.name || 
+              p.name?.includes(policy.name) ||
+              p.name?.includes(fortigatePolicy.name?.split('-')[0])
+            );
+            
+            if (matchingPolicy && matchingPolicy.policyid) {
+              policyId = matchingPolicy.policyid;
+              console.log(`Found policy ID ${policyId} by name lookup`);
+            }
+          }
+        } catch (fetchError: any) {
+          console.error('Error fetching policies to find ID:', fetchError);
+        }
+      }
+      
+      // Final fallback
+      if (!policyId || policyId === 'unknown') {
+        console.warn(`Could not extract policy ID from FortiGate response. Response data:`, JSON.stringify(deployResult.data, null, 2));
+        // Don't set vendorId to 'unknown' - leave it null so we know it wasn't properly deployed
+        return {
+          success: true,
+          message: 'Policy deployed successfully to FortiGate, but policy ID could not be determined. You may need to sync policies to get the correct ID.',
+          vendorId: undefined, // Don't set to 'unknown'
+        };
+      }
       
       return {
         success: true,
@@ -263,13 +334,18 @@ export async function deployPolicy(request: DeploymentRequest): Promise<string> 
         },
       });
 
-      // Update policy with vendor ID
+      // Update policy with vendor ID (only if we got a valid ID)
+      const updateData: any = {
+        status: 'Active',
+      };
+      
+      if (result.vendorId) {
+        updateData.vendorId = result.vendorId;
+      }
+      
       await prisma.policy.update({
         where: { id: request.policyId },
-        data: { 
-          status: 'Active',
-          vendorId: result.vendorId,
-        },
+        data: updateData,
       });
 
       // Update ticket status if exists

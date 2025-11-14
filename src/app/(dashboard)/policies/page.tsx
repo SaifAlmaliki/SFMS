@@ -28,7 +28,8 @@ const statusStyles: Record<Policy['status'], string> = {
 
 
 export default async function PoliciesPage() {
-  const policies = await getPolicies();
+  // Show only real policies from firewall (those with vendorId)
+  const policies = await getPolicies(false, true);
   // In a real app, you would get the current user's role from your auth system.
   // We'll mock it here for demonstration.
   const currentUserRole = 'Administrator'; 

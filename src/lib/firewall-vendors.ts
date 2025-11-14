@@ -52,14 +52,16 @@ export const FORTIGATE_VENDOR: FirewallVendor = {
   policyTemplate: `config firewall policy
   edit 0
     set name "{{name}}"
-    set srcintf "{{srcintf}}"
-    set dstintf "{{dstintf}}"
-    set srcaddr "{{srcaddr}}"
-    set dstaddr "{{dstaddr}}"
+    set srcintf {{#each srcintf}}"{{name}}"{{#unless @last}} {{/unless}}{{/each}}
+    set dstintf {{#each dstintf}}"{{name}}"{{#unless @last}} {{/unless}}{{/each}}
+    set srcaddr {{#each srcaddr}}"{{name}}"{{#unless @last}} {{/unless}}{{/each}}
+    set dstaddr {{#each dstaddr}}"{{name}}"{{#unless @last}} {{/unless}}{{/each}}
     set action {{action}}
     set schedule "{{schedule}}"
-    set service "{{service}}"
+    set service {{#each service}}"{{name}}"{{#unless @last}} {{/unless}}{{/each}}
     set logtraffic {{logtraffic}}
+    set status {{status}}
+    {{#if nat}}set nat {{nat}}{{/if}}
     {{#if comments}}set comments "{{comments}}"{{/if}}
   next
 end`,

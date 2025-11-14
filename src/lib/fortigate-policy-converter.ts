@@ -29,27 +29,52 @@ export function convertPolicyToFortiGate(policy: Policy): FortiGatePolicyFormat 
   const action = policy.action === 'Allow' ? 'accept' : 'deny';
   
   // Map source interface/zone
-  const srcintf = policy.sourceZone 
-    ? [{ name: policy.sourceZone }]
-    : [{ name: 'any' }];
+  // FortiGate expects interface names, not zone names
+  // Common interface names: internal, wan1, wan2, dmz, etc.
+  // If sourceZone is a zone name, try to map it to interface name
+  let srcintfName = 'any';
+  if (policy.sourceZone) {
+    // Map common zone names to interface names
+    const zoneToInterface: Record<string, string> = {
+      'Internal': 'internal',
+      'Public': 'wan1',
+      'DMZ': 'dmz',
+    };
+    srcintfName = zoneToInterface[policy.sourceZone] || policy.sourceZone.toLowerCase() || 'any';
+  }
+  const srcintf = [{ name: srcintfName }];
   
   // Map destination interface/zone
-  const dstintf = policy.destinationZone
-    ? [{ name: policy.destinationZone }]
-    : [{ name: 'any' }];
+  let dstintfName = 'any';
+  if (policy.destinationZone) {
+    const zoneToInterface: Record<string, string> = {
+      'Internal': 'internal',
+      'Public': 'wan1',
+      'DMZ': 'dmz',
+    };
+    dstintfName = zoneToInterface[policy.destinationZone] || policy.destinationZone.toLowerCase() || 'any';
+  }
+  const dstintf = [{ name: dstintfName }];
   
   // Map source address
-  // First check if source is an address object name, otherwise use the IP/FQDN
-  const srcaddr = policy.source && policy.source !== 'any'
-    ? [{ name: policy.source }]
-    : [{ name: 'all' }];
+  // FortiGate expects address object names or 'all' for any
+  let srcaddrName = 'all';
+  if (policy.source && policy.source !== 'any' && policy.source !== 'Any') {
+    // If it's an IP address, it should be converted to an address object name
+    // For now, use the source as-is (assuming it's an address object name)
+    srcaddrName = policy.source;
+  }
+  const srcaddr = [{ name: srcaddrName }];
   
   // Map destination address
-  const dstaddr = policy.destination && policy.destination !== 'any'
-    ? [{ name: policy.destination }]
-    : [{ name: 'all' }];
+  let dstaddrName = 'all';
+  if (policy.destination && policy.destination !== 'any' && policy.destination !== 'Any') {
+    dstaddrName = policy.destination;
+  }
+  const dstaddr = [{ name: dstaddrName }];
   
   // Map service/port
+  // FortiGate expects service object names or 'ALL' for all services
   let service: Array<{ name: string }> = [{ name: 'ALL' }];
   if (policy.destPort) {
     // Check if it's a common service
@@ -61,27 +86,36 @@ export function convertPolicyToFortiGate(policy: Policy): FortiGatePolicyFormat 
       25: 'SMTP',
       53: 'DNS',
       3389: 'RDP',
+      23: 'TELNET',
+      110: 'POP3',
+      143: 'IMAP',
+      993: 'IMAPS',
+      995: 'POP3S',
     };
     
     if (commonServices[policy.destPort]) {
       service = [{ name: commonServices[policy.destPort] }];
     } else {
-      // Create custom service name
-      service = [{ name: `port-${policy.destPort}` }];
+      // For custom ports, we should create a custom service
+      // For now, use ALL and let the deployment handle service creation
+      // Or use a generic TCP/UDP service
+      service = [{ name: 'ALL' }];
     }
   }
   
   // Map status
   const status = policy.status === 'Active' ? 'enable' : 'disable';
   
-  // Ensure unique policy name by including policy ID
-  // FortiGate requires unique policy names, so we append the policy ID
-  const uniqueName = policy.name 
-    ? `${policy.name}-${policy.id}`
-    : `Policy-${policy.id}`;
+  // Policy name - FortiGate has a 35 character limit
+  // Remove policy ID suffix if present to keep name shorter
+  let policyName = policy.name || `Policy-${policy.id}`;
+  // Truncate if too long
+  if (policyName.length > 35) {
+    policyName = policyName.substring(0, 32) + '...';
+  }
   
   return {
-    name: uniqueName,
+    name: policyName,
     srcintf,
     dstintf,
     srcaddr,
@@ -92,6 +126,7 @@ export function convertPolicyToFortiGate(policy: Policy): FortiGatePolicyFormat 
     logtraffic: 'all',
     comments: policy.businessJustification || undefined,
     status,
+    nat: 'disable', // Default to no NAT
   };
 }
 

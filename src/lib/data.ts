@@ -121,13 +121,18 @@ export function getDevicesSync(): Device[] {
 
 // All mocked data has been migrated to PostgreSQL database
 
-export async function getPolicies(syncFromFortiGate: boolean = true) {
+export async function getPolicies(syncFromFortiGate: boolean = true, onlyRealPolicies: boolean = false) {
     // NOTE: Sync functionality has been moved to a separate server action
     // to prevent webpack from bundling server-only code into client components.
     // If you need to sync policies, call the sync action separately before calling getPolicies.
     // The syncFromFortiGate parameter is kept for backward compatibility but does nothing.
     
+    const whereClause = onlyRealPolicies 
+      ? { vendorId: { not: null } } // Only policies that exist in FortiGate
+      : {};
+    
     const policies = await prisma.policy.findMany({
+      where: whereClause,
       orderBy: { updatedAt: 'desc' },
     });
     return policies.map(p => ({
@@ -246,7 +251,7 @@ export async function getObjectGroups() {
 export async function addPolicy(policy: Omit<Policy, 'id'>, user: string = 'System') {
     const count = await prisma.policy.count();
     const newId = `POL-${String(count + 1).padStart(3, '0')}`;
-    await prisma.policy.create({ 
+    const createdPolicy = await prisma.policy.create({ 
         data: { 
             ...policy, 
             id: newId,
@@ -258,7 +263,10 @@ export async function addPolicy(policy: Omit<Policy, 'id'>, user: string = 'Syst
     // Log the activity
     await logActivity(user, `Created policy ${newId}: ${policy.name}`);
     
-    return await getPolicies();
+    return [{
+        ...createdPolicy,
+        status: convertStatusFromPrisma(createdPolicy.status)
+    }];
 }
 
 export async function updatePolicy(updatedPolicy: Partial<Policy> & { id: string }, user: string = 'System') {
@@ -284,6 +292,18 @@ export async function updatePolicy(updatedPolicy: Partial<Policy> & { id: string
 }
 
 export async function deletePolicy(policyId: string, user: string = 'System') {
+    // Delete related records first (due to foreign key constraints)
+    // Delete PolicyDeployment records
+    await prisma.policyDeployment.deleteMany({
+        where: { policyId },
+    });
+    
+    // Delete PolicyHistory records (these have cascade delete, but being explicit)
+    await prisma.policyHistory.deleteMany({
+        where: { policyId },
+    });
+    
+    // Now delete the policy
     await prisma.policy.delete({ where: { id: policyId } });
     
     // Log the activity

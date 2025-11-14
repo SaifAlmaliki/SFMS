@@ -2,6 +2,7 @@
 
 import { DeletePolicyDialog } from "./delete-policy-dialog";
 import { EditPolicyDialog } from "./edit-policy-dialog";
+import { CreateTicketDialog } from "./create-ticket-dialog";
 import type { Policy, UserRole } from "@/lib/data";
 import { ApproveAction } from "./approve-action";
 import { RejectAction } from "./reject-action";
@@ -25,6 +26,7 @@ export function PolicyActions({ policy, currentUserRole }: PolicyActionsProps) {
             )}
             {!isPending && (
                 <>
+                    <CreateTicketDialog policyId={policy.id} />
                     <EditPolicyDialog policy={policy} />
                     <DeletePolicyDialog policyId={policy.id} />
                 </>
