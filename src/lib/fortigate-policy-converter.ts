@@ -74,8 +74,14 @@ export function convertPolicyToFortiGate(policy: Policy): FortiGatePolicyFormat 
   // Map status
   const status = policy.status === 'Active' ? 'enable' : 'disable';
   
+  // Ensure unique policy name by including policy ID
+  // FortiGate requires unique policy names, so we append the policy ID
+  const uniqueName = policy.name 
+    ? `${policy.name}-${policy.id}`
+    : `Policy-${policy.id}`;
+  
   return {
-    name: policy.name || `Policy-${policy.id}`,
+    name: uniqueName,
     srcintf,
     dstintf,
     srcaddr,
