@@ -465,8 +465,7 @@ export async function createIncidentAction(_prevState: any, formData: FormData) 
 }
 
 // Ticket Management Actions
-export async function approveTicketAction(ticketId: string, comment?: string) {
-  const { inngest } = await import('@/inngest/client');
+export async function approveTicketAction(ticketId: string, comment?: string, targetDevice?: string) {
   const { PrismaClient } = await import('../generated/prisma');
   const prisma = new PrismaClient();
 
@@ -504,39 +503,47 @@ export async function approveTicketAction(ticketId: string, comment?: string) {
       });
     }
 
-    // If ticket has a policy, trigger deployment
+    // If ticket has a policy, deploy it directly to the firewall
     if (ticket.policy) {
-      // Check if Inngest is configured
-      if (!process.env.INNGEST_EVENT_KEY) {
-        console.warn('INNGEST_EVENT_KEY not configured. Skipping policy deployment via Inngest.');
-        console.warn('Please set INNGEST_EVENT_KEY in your .env file. See docs/INNGEST_SETUP.md for instructions.');
-        // Ticket is still approved, but deployment won't be triggered
-        return { 
-          success: true, 
-          warning: 'Ticket approved, but policy deployment skipped due to missing Inngest configuration. See docs/INNGEST_SETUP.md for setup instructions.' 
-        };
-      }
-
       try {
-        await inngest.send({
-          name: 'firewall/policy.deploy',
-          data: {
-            policyId: ticket.policyId!,
-            ticketId: ticketId,
-            deployedBy: 'admin@company.com',
-            targetDevice: ticket.policy.targetDevice || 'FW-Primary-DC1',
+        const { deployPolicy } = await import('@/lib/deployment');
+        
+        // Determine target device - use provided targetDevice, policy's targetDevice, or require selection
+        let deploymentDevice = targetDevice || ticket.policy.targetDevice;
+        
+        if (!deploymentDevice) {
+          throw new Error('Target device is required. Please select a firewall device before approving.');
+        }
+        
+        // Verify the device exists and is active
+        const device = await prisma.device.findFirst({
+          where: { 
+            name: deploymentDevice,
+            vendor: ticket.policy.vendor || 'fortigate',
+            status: 'Active' 
           },
         });
-      } catch (inngestError) {
-        // Log the error but don't fail the approval
-        console.error('Failed to send deployment event to Inngest:', inngestError);
-        if (inngestError instanceof Error && inngestError.message.includes('Event key not found')) {
-          return { 
-            success: true, 
-            warning: 'Ticket approved, but Inngest event key is invalid. Please check your INNGEST_EVENT_KEY in .env file. See docs/INNGEST_SETUP.md for setup instructions.' 
-          };
+        
+        if (!device) {
+          throw new Error(`Device "${deploymentDevice}" not found or is not active. Please select a valid device.`);
         }
-        throw inngestError; // Re-throw if it's a different error
+        
+        // Deploy the policy directly
+        await deployPolicy({
+          policyId: ticket.policyId!,
+          ticketId: ticketId,
+          deployedBy: 'admin@company.com',
+          targetDevice: deploymentDevice,
+        });
+        
+        console.log(`Policy ${ticket.policyId} deployed successfully to ${deploymentDevice}`);
+      } catch (deployError: any) {
+        // Log the error but don't fail the approval
+        console.error('Failed to deploy policy:', deployError);
+        return { 
+          success: true, 
+          warning: `Ticket approved, but policy deployment failed: ${deployError.message}. You can try deploying manually from the policies page.`
+        };
       }
     }
 
@@ -882,6 +889,41 @@ export async function getAllFortiGateDevices() {
         updatedAt: device.updatedAt,
         hasApiKey: !!device.apiKey,
       })),
+    };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'Failed to get devices',
+      devices: [],
+    };
+  }
+}
+
+/**
+ * Get active devices for a specific vendor
+ */
+export async function getActiveDevicesForVendor(vendor: string = 'fortigate') {
+  try {
+    const devices = await prisma.device.findMany({
+      where: {
+        vendor: vendor,
+        status: 'Active',
+      },
+      orderBy: {
+        name: 'asc',
+      },
+      select: {
+        id: true,
+        name: true,
+        ip: true,
+        status: true,
+        version: true,
+      },
+    });
+
+    return {
+      success: true,
+      devices: devices,
     };
   } catch (e) {
     return {

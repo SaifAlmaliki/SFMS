@@ -151,6 +151,9 @@ async function deployToFortiGate(deviceName: string, policy: Policy): Promise<{ 
     // Convert policy to FortiGate format
     let fortigatePolicy = convertPolicyToFortiGate(policy);
     
+    // When deploying, always enable the policy since deployment only happens after approval
+    fortigatePolicy.status = 'enable';
+    
     // Ensure address objects exist before creating policy
     // Extract IP addresses from srcaddr and dstaddr arrays
     const srcIp = Array.isArray(fortigatePolicy.srcaddr) && fortigatePolicy.srcaddr.length > 0

@@ -774,50 +774,8 @@ Provide a helpful response.`,
         `Policy created via AI chat: ${query}`
       );
 
-      // Auto-deploy to FortiGate if targetDevice is set
-      // Deploy immediately when created via AI chat
-      if (policy.targetDevice) {
-        try {
-          const { deployPolicy } = await import('@/lib/deployment');
-          await deployPolicy({
-            policyId: policy.id,
-            ticketId: ticket.id,
-            deployedBy: userId,
-            targetDevice: policy.targetDevice,
-          });
-          
-          // Update policy status to Active after successful deployment
-          await prisma.policy.update({
-            where: { id: policy.id },
-            data: { status: 'Active' },
-          });
-          
-          // Update AI response to mention deployment
-          aiResponse += `\n\n✅ Policy has been automatically deployed to ${policy.targetDevice} and is now active.`;
-        } catch (deployError: any) {
-          console.error('Error auto-deploying policy:', deployError);
-          let errorMessage = deployError.message;
-          
-          // If device not found, try to get available devices and suggest them
-          if (errorMessage.includes('not found')) {
-            try {
-              const devices = await prisma.device.findMany({
-                where: { vendor: 'fortigate', status: 'Active' },
-                select: { name: true },
-              });
-              
-              if (devices.length > 0) {
-                const deviceNames = devices.map(d => d.name).join(', ');
-                errorMessage += `\n\n💡 Available devices: ${deviceNames}\n\nTo use "${policy.targetDevice}", please:\n1. Go to Settings page\n2. Enter your FortiGate credentials\n3. Set Device Name to "${policy.targetDevice}"\n4. Test connection and save the device configuration.`;
-              }
-            } catch (err) {
-              // Ignore errors when fetching devices
-            }
-          }
-          
-          aiResponse += `\n\n⚠️ Policy created but deployment to ${policy.targetDevice} failed: ${errorMessage}\n\nYou can deploy it manually from the policies page once the device is configured.`;
-        }
-      }
+      // Note: Policy is created as a ticket and will be deployed when approved by admin
+      // Do NOT auto-deploy - wait for admin approval at /admin/approvals
 
     } catch (error) {
       console.error('Error creating policy and ticket:', error);

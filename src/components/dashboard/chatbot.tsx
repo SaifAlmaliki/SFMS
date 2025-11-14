@@ -79,9 +79,15 @@ export function Chatbot() {
 
   useEffect(() => {
     if (state?.response) {
+      // Convert escaped newlines to actual newlines for proper formatting
+      // Handle both \n and \r\n patterns
+      const formattedResponse = state.response
+        .replace(/\\r\\n/g, '\n')
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\n');
       const botMessage: Message = {
         sender: 'bot',
-        text: state.response,
+        text: formattedResponse,
         metadata: {
           ticketCreated: state.ticketCreated,
           ticketId: state.ticketId,
