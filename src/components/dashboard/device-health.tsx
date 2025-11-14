@@ -18,6 +18,7 @@ type DeviceStatus = 'Online' | 'Offline' | 'Warning';
 type Device = {
   name: string;
   status: DeviceStatus;
+  dbStatus?: 'Active' | 'Inactive'; // Database status (Active/Inactive)
   ip: string;
   version?: string;
   serial?: string;
@@ -123,6 +124,14 @@ export function DeviceHealth() {
                           <Badge {...statusBadges[device.status]}>
                             {statusBadges[device.status].label}
                           </Badge>
+                          {device.dbStatus && (
+                            <Badge
+                              variant={device.dbStatus === 'Active' ? 'default' : 'secondary'}
+                              className={device.dbStatus === 'Active' ? 'bg-blue-500' : 'bg-gray-500'}
+                            >
+                              {device.dbStatus}
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-sm text-muted-foreground mt-1">
                           {device.ip}
@@ -200,12 +209,26 @@ export function DeviceHealth() {
 
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 text-muted-foreground">
-                            <span>Status:</span>
+                            <span>Connection Status:</span>
                           </div>
                           <Badge {...statusBadges[device.status]}>
                             {statusBadges[device.status].label}
                           </Badge>
                         </div>
+
+                        {device.dbStatus && (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <span>Device Status:</span>
+                            </div>
+                            <Badge
+                              variant={device.dbStatus === 'Active' ? 'default' : 'secondary'}
+                              className={device.dbStatus === 'Active' ? 'bg-blue-500' : 'bg-gray-500'}
+                            >
+                              {device.dbStatus}
+                            </Badge>
+                          </div>
+                        )}
                       </div>
 
                       {device.error && (

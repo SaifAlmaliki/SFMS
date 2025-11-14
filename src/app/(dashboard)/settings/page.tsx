@@ -16,6 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { UsersAndRoles } from '@/components/settings/users-and-roles';
 import { InviteUser } from '@/components/settings/invite-user';
 import { FortiGateConnection } from '@/components/fortigate/fortigate-connection';
+import { DeviceList } from '@/components/fortigate/device-list';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useState } from 'react';
 
@@ -150,6 +151,7 @@ export default function SettingsPage() {
           </p>
         </div>
         <FortiGateConnection />
+        <DeviceList />
       </div>
     </div>
   );

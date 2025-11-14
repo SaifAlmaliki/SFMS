@@ -858,6 +858,119 @@ export async function deployPolicyAction(request: DeploymentRequest) {
 }
 
 /**
+ * Get all FortiGate devices
+ */
+export async function getAllFortiGateDevices() {
+  try {
+    const devices = await prisma.device.findMany({
+      where: {
+        vendor: 'fortigate',
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    });
+
+    return {
+      success: true,
+      devices: devices.map(device => ({
+        id: device.id,
+        name: device.name,
+        ip: device.ip,
+        status: device.status,
+        version: device.version,
+        updatedAt: device.updatedAt,
+        hasApiKey: !!device.apiKey,
+      })),
+    };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'Failed to get devices',
+      devices: [],
+    };
+  }
+}
+
+/**
+ * Update device status (activate/deactivate)
+ */
+export async function updateDeviceStatus(deviceId: string, status: 'Active' | 'Inactive') {
+  try {
+    await prisma.device.update({
+      where: { id: deviceId },
+      data: { status },
+    });
+
+    revalidatePath('/settings');
+    return {
+      success: true,
+      message: `Device ${status === 'Active' ? 'activated' : 'deactivated'} successfully`,
+    };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'Failed to update device status',
+    };
+  }
+}
+
+/**
+ * Delete a device
+ */
+export async function deleteDevice(deviceId: string) {
+  try {
+    await prisma.device.delete({
+      where: { id: deviceId },
+    });
+
+    revalidatePath('/settings');
+    return {
+      success: true,
+      message: 'Device deleted successfully',
+    };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'Failed to delete device',
+    };
+  }
+}
+
+/**
+ * Deactivate all mock/test devices (keep only real devices active)
+ */
+export async function deactivateMockDevices() {
+  try {
+    // Deactivate all devices except apiprod-01
+    const result = await prisma.device.updateMany({
+      where: {
+        vendor: 'fortigate',
+        name: {
+          not: 'apiprod-01',
+        },
+      },
+      data: {
+        status: 'Inactive',
+      },
+    });
+
+    revalidatePath('/settings');
+    revalidatePath('/dashboard');
+    return {
+      success: true,
+      message: `Deactivated ${result.count} mock device(s)`,
+      count: result.count,
+    };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'Failed to deactivate mock devices',
+    };
+  }
+}
+
+/**
  * Get device health status for all connected FortiGate devices
  */
 export async function getDeviceHealthAction() {
@@ -865,21 +978,36 @@ export async function getDeviceHealthAction() {
     const { PrismaClient } = await import('../generated/prisma');
     const prisma = new PrismaClient();
 
-    // Get all active FortiGate devices
+    // Get ALL FortiGate devices (both Active and Inactive) to show their status
     const devices = await prisma.device.findMany({
       where: {
         vendor: 'fortigate',
-        status: 'Active',
+      },
+      orderBy: {
+        updatedAt: 'desc',
       },
     });
 
     const healthData = await Promise.allSettled(
       devices.map(async (device) => {
+        // If device is Inactive in database, mark as Offline without checking connection
+        if (device.status === 'Inactive') {
+          return {
+            name: device.name,
+            ip: device.ip,
+            status: 'Offline' as const,
+            dbStatus: 'Inactive' as const,
+            error: 'Device is inactive',
+            version: device.version || 'Unknown',
+          };
+        }
+
         if (!device.apiKey) {
           return {
             name: device.name,
             ip: device.ip,
             status: 'Offline' as const,
+            dbStatus: device.status as 'Active' | 'Inactive',
             error: 'API key not configured',
             version: device.version || 'Unknown',
           };
@@ -942,6 +1070,7 @@ export async function getDeviceHealthAction() {
                   name: device.name,
                   ip: device.ip,
                   status: healthStatus,
+                  dbStatus: device.status as 'Active' | 'Inactive',
                   version: statusResult.version || device.version || 'Unknown',
                   serial: statusResult.serial,
                   build: statusResult.build,
@@ -952,6 +1081,7 @@ export async function getDeviceHealthAction() {
                   name: device.name,
                   ip: device.ip,
                   status: 'Online' as const,
+                  dbStatus: device.status as 'Active' | 'Inactive',
                   version: statusResult.version || device.version || 'Unknown',
                   serial: statusResult.serial,
                   build: statusResult.build,
@@ -962,6 +1092,7 @@ export async function getDeviceHealthAction() {
                 name: device.name,
                 ip: device.ip,
                 status: 'Offline' as const,
+                dbStatus: device.status as 'Active' | 'Inactive',
                 error: statusResult.error || 'Connection failed',
                 version: device.version || 'Unknown',
               };
@@ -991,6 +1122,7 @@ export async function getDeviceHealthAction() {
             name: device.name,
             ip: device.ip,
             status: 'Offline' as const,
+            dbStatus: device.status as 'Active' | 'Inactive',
             error: isTimeout ? 'Connection timeout - device may be unreachable' : errorMessage,
             version: device.version || 'Unknown',
           };
