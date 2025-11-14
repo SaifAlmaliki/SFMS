@@ -248,18 +248,51 @@ function generateVendorCLI(policy: any, vendor: FirewallVendor): string {
  */
 function generateFortiGateCLI(policy: any): string {
   // Handle port-specific service
-  let service = policy.service || 'ALL';
-  if (policy.destPort && policy.service === 'ALL') {
+  let service = 'ALL';
+  if (policy.service) {
+    // Handle array format from API
+    if (Array.isArray(policy.service) && policy.service.length > 0) {
+      service = policy.service[0].name || policy.service[0] || 'ALL';
+    } else if (typeof policy.service === 'string') {
+      service = policy.service;
+    } else if (policy.service && typeof policy.service === 'object' && policy.service.name) {
+      service = policy.service.name;
+    }
+  }
+  
+  if (policy.destPort && service === 'ALL') {
     service = `port-${policy.destPort}`;
   }
+  
+  // Extract values from arrays or objects if needed
+  const extractValue = (value: any, defaultValue: string = 'any'): string => {
+    if (Array.isArray(value) && value.length > 0) {
+      // Handle array format: [{ name: "any" }]
+      return value[0].name || value[0] || defaultValue;
+    }
+    if (value && typeof value === 'object' && value.name) {
+      // Handle object format: { name: "any" }
+      return value.name;
+    }
+    if (typeof value === 'string') {
+      // Already a string
+      return value;
+    }
+    return defaultValue;
+  };
+  
+  const srcintf = extractValue(policy.srcintf, 'any');
+  const dstintf = extractValue(policy.dstintf, 'any');
+  const srcaddr = extractValue(policy.srcaddr, 'all');
+  const dstaddr = extractValue(policy.dstaddr, 'all');
   
   return `config firewall policy
   edit 0
     set name "${policy.name || 'Policy'}"
-    set srcintf "${policy.srcintf || 'any'}"
-    set dstintf "${policy.dstintf || 'any'}"
-    set srcaddr "${policy.srcaddr || 'all'}"
-    set dstaddr "${policy.dstaddr || 'all'}"
+    set srcintf "${srcintf}"
+    set dstintf "${dstintf}"
+    set srcaddr "${srcaddr}"
+    set dstaddr "${dstaddr}"
     set action ${policy.action || 'accept'}
     set schedule "${policy.schedule || 'always'}"
     set service "${service}"
@@ -499,72 +532,97 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
         const validation = validatePolicy(vendorPolicy, selectedVendorConfig);
         if (!validation.valid) {
           console.error('Policy validation failed:', validation.errors);
+          // Don't create ticket if validation fails
+          aiResponse = `I couldn't create the policy because validation failed: ${validation.errors.join(', ')}. Please provide valid source IP, destination, and port information.`;
+          shouldCreatePolicy = false;
+        } else {
+          // Generate vendor-specific CLI config first to validate it
+          cliConfig = generateVendorCLI(vendorPolicy, selectedVendorConfig);
+          
+          // Validate CLI configuration - check for invalid values
+          if (cliConfig && cliConfig.includes('[object Object]')) {
+            console.error('CLI configuration contains invalid values');
+            // Don't create ticket if CLI config is invalid
+            aiResponse = `I couldn't create the policy because the configuration extraction failed. Please provide clear information with:\n- Source IP address (e.g., "10.1.1.5")\n- Destination IP or domain (e.g., "192.168.1.10" or "api.example.com")\n- Port number (e.g., "443" or ":443")`;
+            shouldCreatePolicy = false;
+          } else if (!parsedRequest.sourceIp || !parsedRequest.port || (!parsedRequest.destinationIp && !parsedRequest.destinationFqdn && !parsedRequest.destinationUrl)) {
+            // Validate that all required fields are present
+            console.error('Missing required policy fields');
+            aiResponse = `I couldn't create the policy because required information is missing. Please provide:\n- Source IP address\n- Destination (IP address, domain, or URL)\n- Port number`;
+            shouldCreatePolicy = false;
+          }
         }
         
-        // Generate policy ID
-        const policyId = `POL-${String(Date.now()).slice(-6)}`;
-        
-        // Create policy
-        const policy = await prisma.policy.create({
-          data: {
-            id: policyId,
-            name: parsedRequest.businessJustification ? 
-              `Policy for ${parsedRequest.businessJustification.substring(0, 30)}` :
-              `Policy ${parsedRequest.sourceIp} to ${parsedRequest.destinationIp || parsedRequest.destinationFqdn}:${parsedRequest.port}`,
-            source: parsedRequest.sourceIp,
-            destination: parsedRequest.destinationIp || parsedRequest.destinationFqdn || parsedRequest.destinationUrl || '',
-            destPort: parsedRequest.port,
-            action: 'Allow',
-            status: 'PendingApproval',
-            vendor: vendor,
-            rawConfig: vendorPolicy,
-            businessJustification: parsedRequest.businessJustification,
-            requestedBy: userId,
-            targetDevice: parsedRequest.targetDevice,
-            sourceZone: parsedRequest.sourceZone,
-            destinationZone: parsedRequest.destinationZone,
-          },
-        });
+        // Only create policy and ticket if validation passed
+        if (!shouldCreatePolicy) {
+          // Skip ticket creation - aiResponse already set above
+        } else {
+          // Generate policy ID
+          const policyId = `POL-${String(Date.now()).slice(-6)}`;
+          
+          // Create policy
+          const policy = await prisma.policy.create({
+            data: {
+              id: policyId,
+              name: parsedRequest.businessJustification ? 
+                `Policy for ${parsedRequest.businessJustification.substring(0, 30)}` :
+                `Policy ${parsedRequest.sourceIp} to ${parsedRequest.destinationIp || parsedRequest.destinationFqdn}:${parsedRequest.port}`,
+              source: parsedRequest.sourceIp,
+              destination: parsedRequest.destinationIp || parsedRequest.destinationFqdn || parsedRequest.destinationUrl || '',
+              destPort: parsedRequest.port,
+              action: 'Allow',
+              status: 'PendingApproval',
+              vendor: vendor,
+              rawConfig: vendorPolicy,
+              cliConfig: cliConfig,
+              businessJustification: parsedRequest.businessJustification,
+              requestedBy: userId,
+              targetDevice: parsedRequest.targetDevice,
+              sourceZone: parsedRequest.sourceZone,
+              destinationZone: parsedRequest.destinationZone,
+            },
+          });
 
-        policyGenerated = true;
+          policyGenerated = true;
 
-        // Generate vendor-specific CLI config
-        cliConfig = generateVendorCLI(vendorPolicy, selectedVendorConfig);
+          // Create change ticket
+          const ticket = await prisma.changeTicket.create({
+            data: {
+              ticketNumber: `TKT-${String(Date.now()).slice(-6)}`,
+              policyId: policy.id,
+              requestedBy: userId,
+              title: `Firewall Policy Request: ${policy.name}`,
+              description: `Request to create firewall policy: ${policy.name}\n\nSource: ${policy.source}\nDestination: ${policy.destination}:${policy.destPort}\nAction: ${policy.action}\nBusiness Justification: ${policy.businessJustification || 'Not provided'}`,
+              status: 'PendingApproval',
+              priority: 'Medium',
+            },
+          });
 
-        // Create change ticket
-        const ticket = await prisma.changeTicket.create({
-          data: {
-            ticketNumber: `TKT-${String(Date.now()).slice(-6)}`,
-            policyId: policy.id,
-            requestedBy: userId,
-            title: `Firewall Policy Request: ${policy.name}`,
-            description: `Request to create firewall policy: ${policy.name}\n\nSource: ${policy.source}\nDestination: ${policy.destination}:${policy.destPort}\nAction: ${policy.action}\nBusiness Justification: ${policy.businessJustification || 'Not provided'}`,
-            status: 'PendingApproval',
-            priority: 'Medium',
-          },
-        });
+          ticketCreated = true;
+          ticketId = ticket.id;
 
-        ticketCreated = true;
-        ticketId = ticket.id;
+          // Create policy history entry
+          try {
+            const policyMatcher = new PolicyMatcherService();
+            await policyMatcher.createPolicyHistory(
+              policy.id,
+              'created',
+              userId,
+              `Policy created via AI chat: ${query}`
+            );
+          } catch (historyError) {
+            console.error('Error creating policy history:', historyError);
+          }
 
-        // Create policy history entry
-        try {
-          const policyMatcher = new PolicyMatcherService();
-          await policyMatcher.createPolicyHistory(
-            policy.id,
-            'created',
-            userId,
-            `Policy created via AI chat: ${query}`
-          );
-        } catch (historyError) {
-          console.error('Error creating policy history:', historyError);
+          // Note: Policy is created as a ticket and will be deployed when approved by admin
+          // Do NOT auto-deploy - wait for admin approval at /admin/approvals
         }
-
-        // Note: Policy is created as a ticket and will be deployed when approved by admin
-        // Do NOT auto-deploy - wait for admin approval at /admin/approvals
-
       } catch (error) {
         console.error('Error creating policy and ticket:', error);
+        // Update response to inform user of the error
+        if (shouldCreatePolicy) {
+          aiResponse = `I encountered an error while creating the policy: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again with clearer information.`;
+        }
       }
     }
 

@@ -188,71 +188,6 @@ function formatPoliciesList(policies: any[]): string {
   return formatted;
 }
 
-/**
- * Extract policy information using AI (more intelligent than rule-based parsing)
- */
-async function extractPolicyWithAI(query: string): Promise<{ success: boolean; data?: any; error?: string }> {
-  try {
-    const extractionSchema = z.object({
-      sourceIp: z.string().describe('Source IP address (e.g., "10.1.1.5")'),
-      destinationIp: z.string().optional().describe('Destination IP address if mentioned (e.g., "8.8.8.8")'),
-      destinationFqdn: z.string().optional().describe('Destination FQDN/domain name if mentioned (e.g., "api.example.com")'),
-      destinationUrl: z.string().optional().describe('Destination URL if mentioned (e.g., "https://api.example.com")'),
-      port: z.number().describe('Destination port number (e.g., 443, 80, 8080)'),
-      protocol: z.string().optional().describe('Protocol if mentioned (TCP, UDP, ICMP, etc.)'),
-      businessJustification: z.string().optional().describe('Business justification or reason for the policy if mentioned. IMPORTANT: Do NOT use action words like "access", "connect", "reach", "use" or IP addresses as justification. Only extract actual business reasons like "for API integration", "to support customer portal", "for backup service", etc. If no real business justification is mentioned, leave this field empty.'),
-      targetDevice: z.string().optional().describe('Target device name if mentioned (e.g., "apiprod-01")'),
-      sourceZone: z.string().optional().describe('Source zone/interface if mentioned (e.g., "internal", "dmz")'),
-      destinationZone: z.string().optional().describe('Destination zone/interface if mentioned (e.g., "external", "wan")'),
-    });
-
-    const extractionPrompt = ai.definePrompt({
-      name: 'policyExtractionPrompt',
-      input: { schema: z.object({ query: z.string() }) },
-      output: { schema: extractionSchema },
-      prompt: `Extract firewall policy information from the following user query. Be intelligent and extract all relevant information, even if the wording is informal or uses synonyms.
-
-Examples:
-- "Allow 10.1.1.5 to access 8.8.8.8 on port 443 on device apiprod-01" 
-  → sourceIp: "10.1.1.5", destinationIp: "8.8.8.8", port: 443, targetDevice: "apiprod-01", businessJustification: null (no real justification mentioned)
-- "Block 192.168.1.10 from reaching api.example.com on port 80 for customer portal access"
-  → sourceIp: "192.168.1.10", destinationFqdn: "api.example.com", port: 80, businessJustification: "customer portal access"
-- "Allow 10.0.0.5 to connect to https://service.company.com for backup service"
-  → sourceIp: "10.0.0.5", destinationUrl: "https://service.company.com", port: 443, businessJustification: "backup service"
-
-IMPORTANT RULES:
-- Do NOT use action words like "access", "connect", "reach", "use" as business justification
-- Do NOT use IP addresses or destinations as business justification
-- Only extract actual business reasons (e.g., "for API integration", "to support customer portal", "for backup service")
-- If no real business justification is mentioned, leave businessJustification empty/null
-
-User query: {{{query}}}
-
-Extract the policy information. If a field is not mentioned, omit it (don't make up values).`,
-    });
-
-    const { output } = await extractionPrompt({ query });
-    
-    if (output && output.sourceIp && output.port) {
-      return {
-        success: true,
-        data: output,
-      };
-    } else {
-      return {
-        success: false,
-        error: 'AI extraction failed: missing required fields (sourceIp or port)',
-      };
-    }
-  } catch (error: any) {
-    console.error('AI policy extraction error:', error);
-    return {
-      success: false,
-      error: `AI extraction failed: ${error.message}`,
-    };
-  }
-}
-
 export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<FirewallChatAgentOutput> {
   const { query, userId, conversationId, vendor = 'fortigate', externalSystem } = input;
   
@@ -311,13 +246,8 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
   let parseError: string | undefined = undefined;
   
   if (mightBePolicyRequest) {
-    // First try AI-based extraction (more intelligent for complex queries)
-    let parseResult = await extractPolicyWithAI(query);
-    
-    // Fallback to rule-based parser if AI extraction fails
-    if (!parseResult.success || !parseResult.data) {
-      parseResult = PolicyRequestParser.parse(query);
-    }
+    // Use rule-based parser to extract policy information
+    const parseResult = PolicyRequestParser.parse(query);
     
     if (parseResult.success && parseResult.data) {
       // Additional validation: Ensure all critical fields are valid
@@ -690,12 +620,32 @@ Provide a helpful response.`,
       const validation = validatePolicy(vendorPolicy, selectedVendorConfig);
       if (!validation.valid) {
         console.error('Policy validation failed:', validation.errors);
+        // Don't create ticket if validation fails
+        aiResponse = `I couldn't create the policy because validation failed: ${validation.errors.join(', ')}. Please provide valid source IP, destination, and port information.`;
+        shouldCreatePolicy = false;
+      } else {
+        // Generate CLI configuration for the selected vendor
+        cliConfig = generateVendorCLI(vendorPolicy, selectedVendorConfig);
+        
+        // Validate CLI configuration - check for invalid values
+        if (cliConfig && cliConfig.includes('[object Object]')) {
+          console.error('CLI configuration contains invalid values');
+          // Don't create ticket if CLI config is invalid
+          aiResponse = `I couldn't create the policy because the configuration extraction failed. Please provide clear information with:\n- Source IP address (e.g., "10.1.1.5")\n- Destination IP or domain (e.g., "192.168.1.10" or "api.example.com")\n- Port number (e.g., "443" or ":443")`;
+          shouldCreatePolicy = false;
+        } else if (!parsedRequest.sourceIp || !parsedRequest.port || (!parsedRequest.destinationIp && !parsedRequest.destinationFqdn && !parsedRequest.destinationUrl)) {
+          // Validate that all required fields are present
+          console.error('Missing required policy fields');
+          aiResponse = `I couldn't create the policy because required information is missing. Please provide:\n- Source IP address\n- Destination (IP address, domain, or URL)\n- Port number`;
+          shouldCreatePolicy = false;
+        }
       }
       
-      // Generate CLI configuration for the selected vendor
-      cliConfig = generateVendorCLI(vendorPolicy, selectedVendorConfig);
-      
-      // Create draft policy
+      // Only create policy and ticket if validation passed
+      if (!shouldCreatePolicy) {
+        // Skip ticket creation - aiResponse already set above
+      } else {
+        // Create draft policy
       const policyCount = await prisma.policy.count();
       const policyId = `POL-${String(policyCount + 1).padStart(3, '0')}`;
       
@@ -776,9 +726,13 @@ Provide a helpful response.`,
 
       // Note: Policy is created as a ticket and will be deployed when approved by admin
       // Do NOT auto-deploy - wait for admin approval at /admin/approvals
-
+      }
     } catch (error) {
       console.error('Error creating policy and ticket:', error);
+      // Update response to inform user of the error
+      if (shouldCreatePolicy) {
+        aiResponse = `I encountered an error while creating the policy: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again with clearer information.`;
+      }
     }
   }
 
@@ -847,12 +801,21 @@ function generateFortiGateCLI(policy: any): string {
     service = `port-${policy.destPort}`;
   }
   
-  // Extract values from arrays if needed
+  // Extract values from arrays or objects if needed
   const extractValue = (value: any): string => {
     if (Array.isArray(value) && value.length > 0) {
-      return value[0].name || 'any';
+      // Handle array format: [{ name: "any" }]
+      return value[0].name || value[0] || 'any';
     }
-    return value || 'any';
+    if (value && typeof value === 'object' && value.name) {
+      // Handle object format: { name: "any" }
+      return value.name;
+    }
+    if (typeof value === 'string') {
+      // Already a string
+      return value;
+    }
+    return 'any';
   };
   
   const srcintf = extractValue(policy.srcintf);

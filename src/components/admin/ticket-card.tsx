@@ -23,6 +23,13 @@ export function TicketCard({ ticket, showActions = true }: TicketCardProps) {
             Approved
           </Badge>
         );
+      case 'Deployed':
+        return (
+          <Badge variant="outline" className="text-green-600 border-green-600">
+            <CheckCircle className="h-3 w-3 mr-1" />
+            Deployed
+          </Badge>
+        );
       case 'Rejected':
         return (
           <Badge variant="outline" className="text-red-600 border-red-600">
@@ -50,6 +57,7 @@ export function TicketCard({ ticket, showActions = true }: TicketCardProps) {
   const getBorderColor = () => {
     switch (ticket.status) {
       case 'Approved':
+      case 'Deployed':
         return 'border-l-green-500';
       case 'Rejected':
         return 'border-l-red-500';

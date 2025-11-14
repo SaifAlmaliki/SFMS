@@ -547,6 +547,10 @@ export async function approveTicketAction(ticketId: string, comment?: string, ta
       }
     }
 
+    // Revalidate the approvals page to show updated ticket status
+    revalidatePath('/admin/approvals');
+    revalidatePath('/policies'); // Also revalidate policies page in case policy status changed
+    
     return { success: true };
   } catch (e) {
     console.error('Failed to approve ticket:', e);
