@@ -142,65 +142,62 @@ export async function deletePolicyAction(prevState: any, formData: FormData) {
     }
 
     try {
-        // Get policy to check if it's deployed to FortiGate
-        const policy = await prisma.policy.findUnique({
-            where: { id },
+        // Get policy information
+        // Since we're fetching from FortiGate directly, we need to get policy info from there
+        // For now, we'll create a ticket with the policy ID and let the approval process handle deletion
+        
+        // Check if a deletion ticket already exists for this policy
+        // Since we're using FortiGate IDs (POL-FG-*), check by title/description
+        const existingTicket = await prisma.changeTicket.findFirst({
+            where: {
+                title: {
+                    contains: id,
+                },
+                status: 'PendingApproval',
+                category: 'Policy Deletion',
+            },
         });
 
-        if (!policy) {
-            return { error: 'Policy not found.' };
+        if (existingTicket) {
+            return { error: 'A deletion ticket already exists for this policy and is pending approval.' };
         }
 
-        // If policy is deployed to FortiGate (has vendorId), delete it from FortiGate first
-        // Only attempt deletion if vendorId is valid (not null, not "unknown", and is a number)
-        if (policy.vendorId && 
-            policy.vendorId !== 'unknown' && 
-            policy.vendorId !== 'Unknown' &&
-            !isNaN(Number(policy.vendorId)) &&
-            policy.targetDevice) {
-            try {
-                const device = await prisma.device.findFirst({
-                    where: {
-                        name: policy.targetDevice,
-                        vendor: 'fortigate',
-                        status: 'Active',
-                    },
-                });
+        // Create a deletion ticket
+        const ticketCount = await prisma.changeTicket.count();
+        const ticketNumber = `TKT-${String(ticketCount + 1).padStart(6, '0')}`;
+        
+        // Note: policyId is optional in the schema, but we'll use it to track which policy to delete
+        // We'll store the policy ID in the description since policyId field might conflict with existing tickets
+        const ticket = await prisma.changeTicket.create({
+            data: {
+                ticketNumber,
+                requestedBy: 'user@company.com', // In real app, get from auth
+                title: `Delete Firewall Policy: ${id}`,
+                description: `Request to delete firewall policy ${id} from FortiGate firewall.\n\nThis will permanently remove the policy from the firewall. Please review and approve this deletion request.`,
+                status: 'PendingApproval',
+                priority: 'Medium',
+                ticketType: 'FirewallPolicy',
+                category: 'Policy Deletion',
+                keywords: ['delete', 'policy', 'removal'],
+                isNetworkRelated: true,
+                // Don't set policyId to avoid unique constraint - we'll handle deletion in approval
+            },
+        });
 
-                if (device && device.apiKey) {
-                    const fortigateDevice: FortiGateDevice = {
-                        id: device.id,
-                        name: device.name,
-                        ip: device.ip,
-                        apiKey: device.apiKey,
-                        version: device.version || undefined,
-                    };
-
-                    const client = new FortiGateClient(fortigateDevice);
-                    const deleteResult = await client.firewall.deletePolicy(policy.vendorId);
-
-                    if (!deleteResult.success) {
-                        console.warn(`Failed to delete policy from FortiGate: ${deleteResult.error}`);
-                        // Continue with database deletion even if FortiGate deletion fails
-                    } else {
-                        console.log(`Successfully deleted policy ${policy.vendorId} from FortiGate device ${policy.targetDevice}`);
-                    }
-                }
-            } catch (fortigateError: any) {
-                console.error('Error deleting policy from FortiGate:', fortigateError);
-                // Continue with database deletion even if FortiGate deletion fails
-            }
-        } else if (policy.vendorId && (policy.vendorId === 'unknown' || policy.vendorId === 'Unknown')) {
-            console.warn(`Policy ${id} has invalid vendorId "${policy.vendorId}", skipping FortiGate deletion`);
-        }
-
-        // Delete from database
-        deletePolicy(id);
+        // Store the policy ID to delete in a comment or use the description
+        // We'll parse it from the ticket when approving
+        
         revalidatePath('/policies');
-        return { success: true };
-    } catch (e) {
+        revalidatePath('/admin/approvals');
+        return { 
+            success: true,
+            message: 'Deletion ticket created. Waiting for admin approval.',
+            ticketId: ticket.id,
+        };
+    } catch (e: any) {
+        console.error('Error creating deletion ticket:', e);
         return {
-            error: 'Failed to delete policy. Please try again.',
+            error: 'Failed to create deletion ticket. Please try again.',
         };
     }
 }
@@ -554,6 +551,121 @@ export async function approveTicketAction(ticketId: string, comment?: string, ta
       return { success: false, error: 'Ticket is not pending approval' };
     }
 
+    // Check if this is a deletion ticket
+    const isDeletionTicket = ticket.category === 'Policy Deletion' || 
+                             ticket.title.toLowerCase().includes('delete') ||
+                             ticket.description.toLowerCase().includes('delete');
+
+    if (isDeletionTicket) {
+      // Extract policy ID from ticket title or description
+      // Format: "Delete Firewall Policy: POL-FG-1" or similar
+      const policyIdMatch = ticket.title.match(/POL-FG-(\d+)/) || 
+                           ticket.description.match(/policy\s+([A-Z0-9-]+)/i);
+      
+      if (!policyIdMatch) {
+        return { success: false, error: 'Could not determine policy ID from deletion ticket' };
+      }
+
+      // Fetch policy from FortiGate to get vendorId and targetDevice
+      const devices = await prisma.device.findMany({
+        where: {
+          vendor: 'fortigate',
+          status: 'Active',
+        },
+      });
+
+      let policyFound = false;
+      let deleteError: string | null = null;
+
+      for (const device of devices) {
+        if (!device.apiKey) continue;
+
+        try {
+          const { FortiGateClient, FortiGateDevice } = await import('../lib/fortigate');
+          const fortigateDevice: FortiGateDevice = {
+            id: device.id,
+            name: device.name,
+            ip: device.ip,
+            apiKey: device.apiKey,
+            version: device.version || undefined,
+          };
+
+          const client = new FortiGateClient(fortigateDevice);
+          const policiesResult = await client.firewall.getPolicies();
+
+          if (policiesResult.success && policiesResult.data) {
+            let fortigatePolicies: any[] = [];
+            
+            if (Array.isArray(policiesResult.data)) {
+              fortigatePolicies = policiesResult.data;
+            } else if (policiesResult.data.results) {
+              if (Array.isArray(policiesResult.data.results)) {
+                fortigatePolicies = policiesResult.data.results;
+              } else if (typeof policiesResult.data.results === 'object') {
+                fortigatePolicies = Object.values(policiesResult.data.results);
+              }
+            }
+
+            // Find the policy to delete
+            const policyToDelete = fortigatePolicies.find((p: any) => 
+              `POL-FG-${p.policyid}` === policyIdMatch[0] || 
+              p.policyid?.toString() === policyIdMatch[1]
+            );
+
+            if (policyToDelete && policyToDelete.policyid) {
+              // Delete from FortiGate
+              const deleteResult = await client.firewall.deletePolicy(policyToDelete.policyid.toString());
+
+              if (deleteResult.success) {
+                policyFound = true;
+                console.log(`Successfully deleted policy ${policyToDelete.policyid} from FortiGate device ${device.name}`);
+                break;
+              } else {
+                deleteError = deleteResult.error || 'Failed to delete from FortiGate';
+              }
+            }
+          }
+        } catch (error: any) {
+          console.error(`Error deleting policy from device ${device.name}:`, error);
+          deleteError = error.message;
+        }
+      }
+
+      if (!policyFound) {
+        return { 
+          success: false, 
+          error: deleteError || 'Policy not found in FortiGate or deletion failed' 
+        };
+      }
+
+      // Update ticket status
+      await prisma.changeTicket.update({
+        where: { id: ticketId },
+        data: {
+          status: 'Deployed', // Use Deployed status to indicate deletion completed
+          approvedAt: new Date(),
+          deployedAt: new Date(),
+        },
+      });
+
+      // Add approval comment if provided
+      if (comment) {
+        await prisma.ticketComment.create({
+          data: {
+            ticketId: ticketId,
+            author: 'admin@company.com',
+            content: comment,
+          },
+        });
+      }
+
+      revalidatePath('/admin/approvals');
+      revalidatePath('/policies');
+      
+      return { success: true, message: 'Policy deleted successfully from FortiGate' };
+    }
+
+    // Original deployment logic for non-deletion tickets
     // Update ticket status
     await prisma.changeTicket.update({
       where: { id: ticketId },

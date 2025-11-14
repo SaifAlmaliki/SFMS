@@ -28,7 +28,7 @@ function DeleteButton() {
     return (
         <AlertDialogAction asChild>
             <Button type="submit" variant="destructive" disabled={pending}>
-                {pending ? 'Deleting...' : 'Delete'}
+                {pending ? 'Creating Ticket...' : 'Create Deletion Ticket'}
             </Button>
         </AlertDialogAction>
     )
@@ -44,7 +44,7 @@ export function DeletePolicyDialog({ policyId }: { policyId: string }) {
     if (state.success) {
       toast({
         title: 'Success!',
-        description: 'Policy has been deleted.',
+        description: state.message || 'Deletion ticket created. Waiting for admin approval.',
       });
       setOpen(false);
     }
@@ -68,9 +68,9 @@ export function DeletePolicyDialog({ policyId }: { policyId: string }) {
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+          <AlertDialogTitle>Request Policy Deletion</AlertDialogTitle>
           <AlertDialogDescription>
-            This action cannot be undone. This will permanently delete the policy.
+            A deletion ticket will be created and sent for admin approval. The policy will be deleted from the FortiGate firewall only after admin approval.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
