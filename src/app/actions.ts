@@ -1393,16 +1393,32 @@ export async function getActiveSessionsAction() {
             };
           }
 
+          // Handle 424 error gracefully - this endpoint may not be available on all FortiGate devices
+          const isUnsupportedEndpoint = result.httpStatus === 424 || 
+                                       (result.error && result.error.includes('424'));
+          
           return {
             deviceName: device.name,
             success: false,
-            error: result.error || 'Failed to fetch sessions',
+            error: isUnsupportedEndpoint 
+              ? 'Session endpoint not available on this device'
+              : result.error || 'Failed to fetch sessions',
           };
         } catch (error: any) {
+          // Suppress logging for 424 errors as they're expected on some devices
+          const isUnsupportedEndpoint = error.message?.includes('424') || 
+                                       error.code === 424;
+          
+          if (!isUnsupportedEndpoint) {
+            console.error(`Error fetching sessions for ${device.name}:`, error);
+          }
+          
           return {
             deviceName: device.name,
             success: false,
-            error: error.message || 'Unknown error',
+            error: isUnsupportedEndpoint
+              ? 'Session endpoint not available on this device'
+              : error.message || 'Unknown error',
           };
         }
       })

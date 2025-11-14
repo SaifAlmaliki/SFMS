@@ -226,14 +226,20 @@ export abstract class FortiGateBaseClient {
           errorMessage = `${errorMessage} (Error Code: ${errorCode} - ${codeDescription})`;
         }
         
-        // Log full error details for debugging
-        console.error('FortiGate API error response:', {
-          url,
-          httpStatus: response.status,
-          errorCode,
-          errorMessage,
-          fullResponse: data,
-        });
+        // Suppress logging for 424 errors on session endpoint (not available on all devices)
+        const isSessionEndpoint = url.includes('/monitor/firewall/session');
+        const isUnsupportedError = response.status === 424;
+        
+        if (!(isSessionEndpoint && isUnsupportedError)) {
+          // Log full error details for debugging (except for expected 424 on session endpoint)
+          console.error('FortiGate API error response:', {
+            url,
+            httpStatus: response.status,
+            errorCode,
+            errorMessage,
+            fullResponse: data,
+          });
+        }
         
         return {
           success: false,
