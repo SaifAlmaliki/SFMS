@@ -25,6 +25,7 @@ export interface FirewallChatAgentInput {
   userId: string;
   conversationId?: string;
   vendor?: string;
+  targetDevice?: string; // Target firewall device name for policy deployment
   externalSystem?: string;
 }
 
@@ -440,7 +441,7 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
                       id: `POL-FG-${fgPolicy.policyid || Date.now()}`,
                       vendor: 'fortigate',
                       vendorId: fgPolicy.policyid?.toString(),
-                      targetDevice: device.name,
+                      targetDevice: input.targetDevice || device.name, // Use provided device or first available
                       createdAt: new Date(),
                       updatedAt: new Date(),
                     };
@@ -570,14 +571,14 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
               source: parsedRequest.sourceIp,
               destination: parsedRequest.destinationIp || parsedRequest.destinationFqdn || parsedRequest.destinationUrl || '',
               destPort: parsedRequest.port,
-              action: 'Allow',
+              action: parsedRequest.action || 'Allow', // Use parsed action or default to Allow
               status: 'PendingApproval',
               vendor: vendor,
               rawConfig: vendorPolicy,
               cliConfig: cliConfig,
               businessJustification: parsedRequest.businessJustification,
               requestedBy: userId,
-              targetDevice: parsedRequest.targetDevice,
+              targetDevice: input.targetDevice || parsedRequest.targetDevice, // Use provided device from selection
               sourceZone: parsedRequest.sourceZone,
               destinationZone: parsedRequest.destinationZone,
             },

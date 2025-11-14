@@ -243,14 +243,33 @@ const chatSchema = z.object({
   userId: z.string().optional(),
   conversationId: z.string().optional(),
   vendor: z.string().optional(),
+  targetDevice: z.string().optional(), // Device name instead of just vendor
 });
 
 export async function chatAction(_prevState: any, formData: FormData) {
+    const targetDevice = formData.get('targetDevice') as string;
+    const vendorFromForm = formData.get('vendor') as string;
+    
+    // If targetDevice is provided, get vendor from device, otherwise use form vendor
+    let vendor = vendorFromForm || 'fortigate';
+    if (targetDevice) {
+      const { PrismaClient } = await import('../generated/prisma');
+      const prisma = new PrismaClient();
+      const device = await prisma.device.findFirst({
+        where: { name: targetDevice },
+        select: { vendor: true },
+      });
+      if (device) {
+        vendor = device.vendor || vendor;
+      }
+    }
+    
     const validatedFields = chatSchema.safeParse({
         query: formData.get('query'),
         userId: formData.get('userId') as string || 'user-001',
         conversationId: formData.get('conversationId') as string,
-        vendor: formData.get('vendor') as string || 'fortigate',
+        vendor: vendor,
+        targetDevice: targetDevice,
     });
 
     if (!validatedFields.success) {
@@ -269,6 +288,7 @@ export async function chatAction(_prevState: any, formData: FormData) {
                 userId: validatedFields.data.userId || 'user-001',
                 conversationId: validatedFields.data.conversationId,
                 vendor: validatedFields.data.vendor || 'fortigate',
+                targetDevice: validatedFields.data.targetDevice, // Pass device name
                 externalSystem: validatedFields.data.externalSystem,
             });
         } catch (aiError) {
@@ -280,6 +300,7 @@ export async function chatAction(_prevState: any, formData: FormData) {
                 userId: validatedFields.data.userId || 'user-001',
                 conversationId: validatedFields.data.conversationId,
                 vendor: validatedFields.data.vendor || 'fortigate',
+                targetDevice: validatedFields.data.targetDevice, // Pass device name
                 externalSystem: validatedFields.data.externalSystem,
             });
         }
@@ -691,11 +712,27 @@ export async function approveTicketAction(ticketId: string, comment?: string, ta
       try {
         const { deployPolicy } = await import('@/lib/deployment');
         
-        // Determine target device - use provided targetDevice, policy's targetDevice, or require selection
+        // Determine target device - use provided targetDevice, policy's targetDevice, or get first active device
         let deploymentDevice = targetDevice || ticket.policy.targetDevice;
         
+        // If no device specified, try to get the first active FortiGate device
         if (!deploymentDevice) {
-          throw new Error('Target device is required. Please select a firewall device before approving.');
+          const firstDevice = await prisma.device.findFirst({
+            where: {
+              vendor: ticket.policy.vendor || 'fortigate',
+              status: 'Active',
+            },
+            orderBy: {
+              updatedAt: 'desc',
+            },
+          });
+          
+          if (firstDevice) {
+            deploymentDevice = firstDevice.name;
+            console.log(`No target device specified, using first active device: ${deploymentDevice}`);
+          } else {
+            throw new Error('No active FortiGate devices found. Please configure a device in Settings or select a device when approving.');
+          }
         }
         
         // Verify the device exists and is active
@@ -711,23 +748,57 @@ export async function approveTicketAction(ticketId: string, comment?: string, ta
           throw new Error(`Device "${deploymentDevice}" not found or is not active. Please select a valid device.`);
         }
         
+        if (!device.apiKey) {
+          throw new Error(`Device "${deploymentDevice}" does not have an API key configured. Please configure the API key in Settings.`);
+        }
+        
+        // Verify policy exists before deploying
+        const policyToDeploy = await prisma.policy.findUnique({
+          where: { id: ticket.policyId! },
+        });
+        
+        if (!policyToDeploy) {
+          throw new Error(`Policy ${ticket.policyId} not found in database. Cannot deploy.`);
+        }
+        
+        console.log(`Deploying policy ${ticket.policyId} to ${deploymentDevice}:`, {
+          action: policyToDeploy.action,
+          source: policyToDeploy.source,
+          destination: policyToDeploy.destination,
+          port: policyToDeploy.destPort,
+        });
+        
         // Deploy the policy directly
-        await deployPolicy({
+        const deploymentId = await deployPolicy({
           policyId: ticket.policyId!,
           ticketId: ticketId,
           deployedBy: 'admin@company.com',
           targetDevice: deploymentDevice,
         });
         
-        console.log(`Policy ${ticket.policyId} deployed successfully to ${deploymentDevice}`);
+        console.log(`Policy ${ticket.policyId} deployed successfully to ${deploymentDevice} (deployment ID: ${deploymentId})`);
       } catch (deployError: any) {
-        // Log the error but don't fail the approval
-        console.error('Failed to deploy policy:', deployError);
+        // Log the full error for debugging
+        console.error('Failed to deploy policy:', {
+          error: deployError.message,
+          stack: deployError.stack,
+          policyId: ticket.policyId,
+          targetDevice: targetDevice || ticket.policy.targetDevice,
+        });
+        
+        // Return error instead of just warning - deployment failure should be visible
         return { 
-          success: true, 
-          warning: `Ticket approved, but policy deployment failed: ${deployError.message}. You can try deploying manually from the policies page.`
+          success: false, 
+          error: `Policy deployment failed: ${deployError.message}. Please check the device configuration and try again.`
         };
       }
+    } else {
+      // Ticket doesn't have a policy linked - this shouldn't happen for policy creation tickets
+      console.warn(`Ticket ${ticketId} does not have a linked policy. Cannot deploy.`);
+      return {
+        success: false,
+        error: 'Ticket does not have a linked policy. Cannot deploy to firewall.',
+      };
     }
 
     // Revalidate the approvals page to show updated ticket status
@@ -1103,6 +1174,7 @@ export async function getActiveDevicesForVendor(vendor: string = 'fortigate') {
         id: true,
         name: true,
         ip: true,
+        vendor: true,
         status: true,
         version: true,
       },

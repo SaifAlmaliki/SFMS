@@ -2,7 +2,7 @@
 
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { chatAction } from '@/app/actions';
+import { chatAction, getActiveDevicesForVendor } from '@/app/actions';
 import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Message {
   sender: 'user' | 'bot';
@@ -73,16 +74,58 @@ interface SimpleChatbotProps {
   };
 }
 
+interface Device {
+  id: string;
+  name: string;
+  ip: string;
+  vendor: string;
+  status: string;
+  version: string | null;
+}
+
 export function SimpleChatbot({ initialQuery, templateId, templateContext }: SimpleChatbotProps = {}) {
   const [state, formAction] = useActionState(chatAction, initialState);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedVendor, setSelectedVendor] = useState('fortigate');
+  const [selectedDevice, setSelectedDevice] = useState<string>('');
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(true);
   const [selectedExternalSystem, setSelectedExternalSystem] = useState('');
   const [conversationId, setConversationId] = useState('');
   const formRef = useRef<HTMLFormElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch available devices on mount
+  useEffect(() => {
+    const fetchDevices = async () => {
+      setLoadingDevices(true);
+      try {
+        // Fetch devices for all vendors (we'll filter by active status)
+        const fortigateResult = await getActiveDevicesForVendor('fortigate');
+        const allDevices: Device[] = [];
+        
+        if (fortigateResult.success && fortigateResult.devices) {
+          allDevices.push(...fortigateResult.devices);
+        }
+        
+        // Sort by name and set devices
+        allDevices.sort((a, b) => a.name.localeCompare(b.name));
+        setDevices(allDevices);
+        
+        // Auto-select first device if available
+        if (allDevices.length > 0 && !selectedDevice) {
+          setSelectedDevice(allDevices[0].name);
+        }
+      } catch (error) {
+        console.error('Failed to fetch devices:', error);
+      } finally {
+        setLoadingDevices(false);
+      }
+    };
+    
+    fetchDevices();
+  }, []);
 
   // Initialize with template context if provided
   useEffect(() => {
@@ -149,11 +192,25 @@ export function SimpleChatbot({ initialQuery, templateId, templateContext }: Sim
   const handleFormSubmit = (formData: FormData) => {
     const query = formData.get('query') as string;
     if (query.trim()) {
+      if (!selectedDevice) {
+        // Show error if no device selected
+        setMessages((prev) => [
+          ...prev,
+          { sender: 'bot', text: 'Error: Please select a firewall device before submitting your request.' }
+        ]);
+        return;
+      }
+      
       setMessages((prev) => [...prev, { sender: 'user', text: query }]);
       setIsLoading(true);
       
-      // Add vendor and external system to form data
-      formData.set('vendor', selectedVendor);
+      // Find the selected device to get vendor
+      const device = devices.find(d => d.name === selectedDevice);
+      const vendor = device?.vendor || 'fortigate';
+      
+      // Add device name, vendor, and external system to form data
+      formData.set('targetDevice', selectedDevice);
+      formData.set('vendor', vendor);
       formData.set('externalSystem', selectedExternalSystem);
       formData.set('conversationId', conversationId);
       formData.set('userId', 'user-001'); // Default user ID
@@ -179,20 +236,45 @@ export function SimpleChatbot({ initialQuery, templateId, templateContext }: Sim
         </div>
       )}
 
-      {/* Vendor Selection */}
+      {/* Device Selection */}
       <div className="p-4 border-b bg-background">
         <div className="flex gap-4 items-end">
           <div className="flex-1">
-            <label className="text-sm font-medium">Firewall Vendor</label>
-            <select 
-              value={selectedVendor} 
-              onChange={(e) => setSelectedVendor(e.target.value)}
-              className="w-full mt-1 px-3 py-2 border rounded-md bg-background"
-            >
-              <option value="fortigate">FortiGate</option>
-              <option value="paloalto">Palo Alto</option>
-              <option value="cisco">Cisco</option>
-            </select>
+            <label className="text-sm font-medium">Connected Firewall <span className="text-red-500">*</span></label>
+            {loadingDevices ? (
+              <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading devices...
+              </div>
+            ) : devices.length === 0 ? (
+              <div className="mt-1 text-sm text-red-600">
+                No active firewalls found. Please configure a device in Settings.
+              </div>
+            ) : (
+              <Select value={selectedDevice} onValueChange={setSelectedDevice} required>
+                <SelectTrigger className="w-full mt-1">
+                  <SelectValue placeholder="Select a firewall device" />
+                </SelectTrigger>
+                <SelectContent>
+                  {devices.map((device) => (
+                    <SelectItem key={device.id} value={device.name}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{device.name}</span>
+                        {device.ip && <span className="text-muted-foreground">({device.ip})</span>}
+                        {device.vendor && (
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            {device.vendor.toUpperCase()}
+                          </Badge>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              Select the firewall where policies will be applied
+            </p>
           </div>
           <div className="flex-1">
             <label className="text-sm font-medium">External System</label>

@@ -14,6 +14,7 @@ export interface ParsedPolicyRequest {
   targetDevice?: string;
   sourceZone?: string;
   destinationZone?: string;
+  action?: 'Allow' | 'Deny';  // Extracted from query (block/deny = Deny, allow = Allow)
 }
 
 export interface ParseResult {
@@ -69,6 +70,7 @@ export class PolicyRequestParser {
       const targetDevice = this.extractTargetDevice(query);
       const sourceZone = this.extractSourceZone(query);
       const destinationZone = this.extractDestinationZone(query);
+      const action = this.extractAction(query);
 
       const result: ParsedPolicyRequest = {
         sourceIp,
@@ -77,7 +79,8 @@ export class PolicyRequestParser {
         businessJustification,
         targetDevice,
         sourceZone,
-        destinationZone
+        destinationZone,
+        action
       };
 
       // Add destination based on what was found
@@ -261,6 +264,34 @@ export class PolicyRequestParser {
     }
 
     return null;
+  }
+
+  /**
+   * Extract action (Allow or Deny) from query
+   */
+  private static extractAction(query: string): 'Allow' | 'Deny' | undefined {
+    const lowerQuery = query.toLowerCase();
+    
+    // Check for block/deny keywords
+    const denyKeywords = ['block', 'deny', 'prevent', 'stop', 'disallow', 'reject', 'forbid', 'prohibit'];
+    const allowKeywords = ['allow', 'permit', 'enable', 'grant'];
+    
+    // Check for deny keywords first (more specific)
+    for (const keyword of denyKeywords) {
+      if (lowerQuery.includes(keyword)) {
+        return 'Deny';
+      }
+    }
+    
+    // Check for allow keywords
+    for (const keyword of allowKeywords) {
+      if (lowerQuery.includes(keyword)) {
+        return 'Allow';
+      }
+    }
+    
+    // Default to Allow if no action specified
+    return undefined;
   }
 
   /**
