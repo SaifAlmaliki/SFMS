@@ -114,8 +114,9 @@ export class PolicyRequestParser {
     const patterns = [
       /(?:from|source|src)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i,
       /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(?:to|towards|->)/i,
-      /allow\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i,
-      /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(?:access|connection)/i
+      /(?:block|allow|deny|permit)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i, // Match "Block IP" or "Allow IP"
+      /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+from/i, // Match "IP from" (e.g., "192.168.1.100 from accessing")
+      /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(?:access|connection|accessing)/i
     ];
 
     for (const pattern of patterns) {
@@ -134,11 +135,12 @@ export class PolicyRequestParser {
   private static extractDestination(query: string): { ip?: string; fqdn?: string; url?: string } {
     const result: { ip?: string; fqdn?: string; url?: string } = {};
 
-    // Extract IP address - handle cases like "to access 8.8.8.8" or "to 8.8.8.8"
+    // Extract IP address - handle cases like "to access 8.8.8.8", "to 8.8.8.8", "from accessing 10.0.0.5"
     const ipPatterns = [
       /(?:to|towards|->)\s+(?:access|connect|reach|use)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i,  // "to access 8.8.8.8"
       /(?:to|towards|->)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i,  // "to 8.8.8.8"
-      /(?:access|connect|reach|use)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i,  // "access 8.8.8.8" (fallback)
+      /(?:from\s+)?(?:accessing|access|connect|reach|use)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i,  // "from accessing 10.0.0.5" or "access 8.8.8.8"
+      /(?:accessing|access|connect|reach|use)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/i,  // "accessing 10.0.0.5" (fallback)
     ];
     
     for (const ipPattern of ipPatterns) {
