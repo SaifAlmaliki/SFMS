@@ -1092,7 +1092,7 @@ export async function getFortiGateDevice(deviceName?: string) {
     let device;
     
     if (deviceName) {
-      // Get specific device by name
+      // Get specific device by name (regardless of status)
       device = await prisma.device.findFirst({
         where: {
           name: deviceName,
@@ -1100,7 +1100,7 @@ export async function getFortiGateDevice(deviceName?: string) {
         },
       });
     } else {
-      // Get first active FortiGate device
+      // First try to get the most recently updated active device
       device = await prisma.device.findFirst({
         where: {
           vendor: 'fortigate',
@@ -1110,6 +1110,18 @@ export async function getFortiGateDevice(deviceName?: string) {
           updatedAt: 'desc',
         },
       });
+      
+      // If no active device found, get the most recently updated device regardless of status
+      if (!device) {
+        device = await prisma.device.findFirst({
+          where: {
+            vendor: 'fortigate',
+          },
+          orderBy: {
+            updatedAt: 'desc',
+          },
+        });
+      }
     }
 
     if (!device) {

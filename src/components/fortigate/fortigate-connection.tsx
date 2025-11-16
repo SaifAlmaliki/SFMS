@@ -53,7 +53,13 @@ export function FortiGateConnection() {
   useEffect(() => {
     const loadSavedDevice = async () => {
       try {
-        const result = await getFortiGateDevice();
+        // Try to get the last used device name from localStorage
+        const lastDeviceName = typeof window !== 'undefined' 
+          ? localStorage.getItem('fortigate_last_device_name') 
+          : null;
+        
+        // Load device by name if we have it, otherwise get the most recent device
+        const result = await getFortiGateDevice(lastDeviceName || undefined);
         if (result.success && result.device) {
           setFormData({
             hostname: result.device.hostname || '',
@@ -61,6 +67,10 @@ export function FortiGateConnection() {
             apiKey: result.device.apiKey || '',
             deviceName: result.device.name || '',
           });
+          // Store the device name for next time
+          if (typeof window !== 'undefined' && result.device.name) {
+            localStorage.setItem('fortigate_last_device_name', result.device.name);
+          }
         } else {
           // Set default values if no device found
           setFormData({
@@ -120,6 +130,10 @@ export function FortiGateConnection() {
               apiUsername: savedDevice.device!.apiUsername || prev.apiUsername,
               apiKey: savedDevice.device!.apiKey || prev.apiKey,
             }));
+            // Store the device name for next time
+            if (typeof window !== 'undefined' && savedDevice.device.name) {
+              localStorage.setItem('fortigate_last_device_name', savedDevice.device.name);
+            }
           }
         }
       } else {
@@ -192,6 +206,11 @@ export function FortiGateConnection() {
           title: 'Device Saved',
           description: `FortiGate device "${formData.deviceName}" has been saved successfully`,
         });
+        
+        // Store the device name for next time
+        if (typeof window !== 'undefined' && formData.deviceName) {
+          localStorage.setItem('fortigate_last_device_name', formData.deviceName);
+        }
         
         // Reload saved device data to ensure form shows the saved credentials
         const savedDevice = await getFortiGateDevice(formData.deviceName);
