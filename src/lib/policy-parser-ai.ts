@@ -77,7 +77,7 @@ IMPORTANT RULES:
 6. Extract zones if mentioned (Internal, DMZ, External, WAN, LAN, Trust, Untrust)
 7. Extract business justification if mentioned (phrases like "for", "because", "to enable", "for the purpose of")
 
-User Query: {{{query}}}
+User Query: {{input.query}}
 `,
 });
 
@@ -93,7 +93,8 @@ export class AIPolicyRequestParser {
       // Call the AI prompt to extract policy information
       const result = await policyParsePrompt({ input: { query } });
 
-      if (!result.output) {
+      if (!result || !result.output) {
+        console.error('AI parser returned no output:', result);
         return {
           success: false,
           error: 'AI parser returned no output. Please provide a valid policy request with source IP, destination, and port.'
@@ -101,6 +102,18 @@ export class AIPolicyRequestParser {
       }
 
       const parsedData = result.output;
+      
+      // Debug logging
+      console.log('AI Parser Output:', JSON.stringify(parsedData, null, 2));
+      
+      // Handle case where output might be nested or have different structure
+      if (typeof parsedData !== 'object' || parsedData === null) {
+        console.error('Unexpected output format:', parsedData);
+        return {
+          success: false,
+          error: 'AI parser returned invalid output format. Please try again.'
+        };
+      }
 
       // Validate required fields
       if (!parsedData.sourceIp) {

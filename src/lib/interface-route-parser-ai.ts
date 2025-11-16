@@ -100,7 +100,7 @@ IMPORTANT RULES:
 5. Infer interface type from name patterns: "vlan*" → vlan, "loopback*" → loopback, "port*" → physical
 6. Extract VDOM if mentioned (e.g., "in vdom root", "on vdom1")
 
-User Query: {{{query}}}
+User Query: {{input.query}}
 `,
 });
 

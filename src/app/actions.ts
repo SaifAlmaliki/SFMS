@@ -1771,31 +1771,33 @@ export async function getResourceUsageAction() {
           if (result.success && result.data) {
             const data = result.data;
             
-            // Parse the API response structure: cpu[0].current, mem[0].current, disk[0].current
-            // The base client already extracts 'results', so result.data is the results object
-            const cpu = data.cpu?.[0]?.current ?? 
-                       data.cpu?.usage ?? 
-                       data.cpu_usage ?? 
-                       (typeof data.cpu === 'number' ? data.cpu : 0);
-            
-            const memory = data.mem?.[0]?.current ?? 
-                          data.memory?.[0]?.current ??
-                          data.memory?.usage ?? 
-                          data.mem_usage ?? 
-                          (typeof data.memory === 'number' ? data.memory : 0);
-            
-            const disk = data.disk?.[0]?.current ?? 
-                        data.disk?.usage ?? 
-                        data.disk_usage ?? 
-                        (typeof data.disk === 'number' ? data.disk : 0);
+            // Helper function to extract current value from metric array
+            const getCurrentValue = (metricArray: any[] | undefined): number => {
+              if (Array.isArray(metricArray) && metricArray.length > 0) {
+                return typeof metricArray[0]?.current === 'number' ? metricArray[0].current : 0;
+              }
+              return 0;
+            };
 
             return {
               deviceName: device.name,
               success: true,
               data: {
-                cpu: typeof cpu === 'number' ? cpu : 0,
-                memory: typeof memory === 'number' ? memory : 0,
-                disk: typeof disk === 'number' ? disk : 0,
+                cpu: getCurrentValue(data.cpu),
+                memory: getCurrentValue(data.mem),
+                disk: getCurrentValue(data.disk),
+                session: getCurrentValue(data.session),
+                session6: getCurrentValue(data.session6),
+                setuprate: getCurrentValue(data.setuprate),
+                setuprate6: getCurrentValue(data.setuprate6),
+                npu_session: getCurrentValue(data.npu_session),
+                npu_session6: getCurrentValue(data.npu_session6),
+                nturbo_session: getCurrentValue(data.nturbo_session),
+                nturbo_session6: getCurrentValue(data.nturbo_session6),
+                disk_lograte: getCurrentValue(data.disk_lograte),
+                faz_lograte: getCurrentValue(data.faz_lograte),
+                forticloud_lograte: getCurrentValue(data.forticloud_lograte),
+                faz_cloud_lograte: getCurrentValue(data.faz_cloud_lograte),
               },
             };
           }
