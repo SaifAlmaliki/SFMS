@@ -6,13 +6,14 @@ import { chatAction, getActiveDevicesForVendor } from '@/app/actions';
 import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send, Bot, User, AlertTriangle, CheckCircle, ExternalLink, Loader2, Shield, Ban, HelpCircle, Search } from 'lucide-react';
+import { Send, Bot, User, AlertTriangle, CheckCircle, ExternalLink, Loader2, Shield, Ban, HelpCircle, Search, Route, Network } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 
 interface Message {
   sender: 'user' | 'bot';
@@ -506,6 +507,49 @@ export function SimpleChatbot({ initialQuery, templateId, templateContext }: Sim
           >
             <HelpCircle className="h-3.5 w-3.5" />
             Help
+          </button>
+          <Separator orientation="vertical" className="h-6" />
+          <button
+            type="button"
+            onClick={() => {
+              const input = formRef.current?.querySelector('input[name="query"]') as HTMLInputElement;
+              if (input) {
+                input.value = "Add static route to 192.168.1.0/24 via gateway 10.0.0.1";
+                input.focus();
+              }
+            }}
+            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors flex items-center gap-1.5"
+          >
+            <Route className="h-3.5 w-3.5" />
+            Add Route
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const input = formRef.current?.querySelector('input[name="query"]') as HTMLInputElement;
+              if (input) {
+                input.value = "List all static routes";
+                input.focus();
+              }
+            }}
+            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors flex items-center gap-1.5"
+          >
+            <Route className="h-3.5 w-3.5" />
+            List Routes
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const input = formRef.current?.querySelector('input[name="query"]') as HTMLInputElement;
+              if (input) {
+                input.value = "Create VLAN interface 100 with IP 10.10.10.1/24 on port1";
+                input.focus();
+              }
+            }}
+            className="px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded-md border border-border transition-colors flex items-center gap-1.5"
+          >
+            <Network className="h-3.5 w-3.5" />
+            Create VLAN
           </button>
         </div>
         
