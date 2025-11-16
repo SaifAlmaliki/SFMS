@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PolicyMatcherService } from '@/lib/policy-matcher';
-import { PolicyRequestParser } from '@/lib/policy-parser';
+import { AIPolicyRequestParser } from '@/lib/policy-parser-ai';
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
 
     // If query is provided, parse it; otherwise use individual fields
     if (query) {
-      const parseResult = PolicyRequestParser.parse(query);
+      const parseResult = await AIPolicyRequestParser.parse(query);
       if (!parseResult.success) {
         return NextResponse.json(
           { success: false, error: parseResult.error },

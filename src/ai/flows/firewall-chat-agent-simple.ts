@@ -3,7 +3,7 @@
  */
 
 import { PrismaClient } from '../../generated/prisma';
-import { PolicyRequestParser } from '@/lib/policy-parser';
+import { AIPolicyRequestParser } from '@/lib/policy-parser-ai';
 import { PolicyMatcherService } from '@/lib/policy-matcher';
 import { getVendorById, getDefaultVendor, convertToVendorFormat, validatePolicy, type FirewallVendor } from '@/lib/firewall-vendors';
 import { FortiGateClient, FortiGateDevice } from '@/lib/fortigate';
@@ -66,13 +66,13 @@ function isPolicyRequest(query: string): boolean {
   // Check for explicit keywords first
   const hasExplicitKeyword = explicitKeywords.some(keyword => lowerQuery.includes(keyword));
   
-  // Try to parse to see if there's actual policy data
-  const parseResult = PolicyRequestParser.parse(query);
+  // Use AI parser's quick check method (synchronous, doesn't call API)
+  const looksLikePolicyRequest = AIPolicyRequestParser.isPolicyRequest(query);
   
   // Only return true if:
-  // 1. Has explicit keyword AND parsing succeeds (has actual data), OR
-  // 2. Parsing succeeds without explicit keyword (user provided policy details directly)
-  if (parseResult.success) {
+  // 1. Has explicit keyword AND looks like policy request, OR
+  // 2. Looks like policy request (user provided policy details directly)
+  if (looksLikePolicyRequest) {
     return true; // Has actual policy data (source IP, destination, port)
   }
   
@@ -478,8 +478,8 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
     let shouldCreatePolicy = false;
     if (mightBePolicyRequest) {
       try {
-        // Parse policy request
-        const parseResult = PolicyRequestParser.parse(query);
+        // Parse policy request using AI parser
+        const parseResult = await AIPolicyRequestParser.parse(query);
         if (parseResult.success && parseResult.data) {
           // Only set shouldCreatePolicy to true if parsing succeeded with valid data
           shouldCreatePolicy = true;

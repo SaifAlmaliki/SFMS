@@ -7,7 +7,8 @@ import { z } from 'genkit';
 import { PrismaClient } from '../../generated/prisma';
 import { getVendorById, getDefaultVendor, convertToVendorFormat, validatePolicy, AVAILABLE_VENDORS, type FirewallVendor } from '@/lib/firewall-vendors';
 import { ExternalTicketService } from '@/lib/external-ticket-service';
-import { PolicyRequestParser } from '@/lib/policy-parser';
+import { AIPolicyRequestParser } from '@/lib/policy-parser-ai';
+import { PolicyRequestParser } from '@/lib/policy-parser'; // Keep for isValidIp utility if needed
 import { PolicyMatcherService } from '@/lib/policy-matcher';
 import { classifyTicket, type TicketClassification } from '@/lib/ticket-classifier';
 import { searchKnowledgeBase } from '@/lib/knowledge-base-service';
@@ -70,13 +71,13 @@ function isPolicyRequest(query: string): boolean {
   // Check for explicit keywords first
   const hasExplicitKeyword = explicitKeywords.some(keyword => lowerQuery.includes(keyword));
   
-  // Try to parse to see if there's actual policy data
-  const parseResult = PolicyRequestParser.parse(query);
+  // Use AI parser's quick check method (synchronous, doesn't call API)
+  const looksLikePolicyRequest = AIPolicyRequestParser.isPolicyRequest(query);
   
   // Only return true if:
-  // 1. Has explicit keyword AND parsing succeeds (has actual data), OR
-  // 2. Parsing succeeds without explicit keyword (user provided policy details directly)
-  if (parseResult.success) {
+  // 1. Has explicit keyword AND looks like policy request, OR
+  // 2. Looks like policy request (user provided policy details directly)
+  if (looksLikePolicyRequest) {
     return true; // Has actual policy data (source IP, destination, port)
   }
   
@@ -247,44 +248,29 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
   let parseError: string | undefined = undefined;
   
   if (mightBePolicyRequest) {
-    // Use rule-based parser to extract policy information
-    const parseResult = PolicyRequestParser.parse(query);
+    // Use AI-powered parser to extract policy information
+    const parseResult = await AIPolicyRequestParser.parse(query);
     
     if (parseResult.success && parseResult.data) {
-      // Additional validation: Ensure all critical fields are valid
+      // AI parser already validates, so we can trust the data
       const data = parseResult.data;
       
-      // Validate source IP
-      if (!PolicyRequestParser.isValidIp(data.sourceIp)) {
-        parseError = `Invalid source IP address: "${data.sourceIp}". Please provide a valid IP address (e.g., 10.1.1.5).`;
-      }
-      // Validate destination
-      else if (data.destinationIp && !PolicyRequestParser.isValidIp(data.destinationIp)) {
-        parseError = `Invalid destination IP address: "${data.destinationIp}". Please provide a valid IP address (e.g., 192.168.1.10).`;
-      }
-      // Validate port
-      else if (!data.port || data.port < 1 || data.port > 65535) {
-        parseError = `Invalid or missing port number. Port must be between 1 and 65535 (e.g., :443, port 8080).`;
-      }
+      // All validations passed - this is definitely a policy request
+      hasValidPolicyData = true;
+      shouldCreatePolicy = true;
+      parsedRequest = data;
+      missingJustification = !parsedRequest.businessJustification;
       
-      if (!parseError) {
-        // All validations passed - this is definitely a policy request
-        hasValidPolicyData = true;
-        shouldCreatePolicy = true;
-        parsedRequest = data;
-        missingJustification = !parsedRequest.businessJustification;
-        
-        // Check for duplicates/conflicts - this should happen for ALL valid policy requests
-        // BEFORE creating any tickets or policies
-        const policyMatcher = new PolicyMatcherService();
-        const matchResult = await policyMatcher.findExactMatches(parsedRequest);
-        
-        if (matchResult.hasMatch) {
-          duplicateFound = true;
-          matchedPolicies = matchResult.matchedPolicies;
-          // If duplicate found, don't create a new policy
-          shouldCreatePolicy = false;
-        }
+      // Check for duplicates/conflicts - this should happen for ALL valid policy requests
+      // BEFORE creating any tickets or policies
+      const policyMatcher = new PolicyMatcherService();
+      const matchResult = await policyMatcher.findExactMatches(parsedRequest);
+      
+      if (matchResult.hasMatch) {
+        duplicateFound = true;
+        matchedPolicies = matchResult.matchedPolicies;
+        // If duplicate found, don't create a new policy
+        shouldCreatePolicy = false;
       }
     } else {
       // Parsing failed - capture the error
