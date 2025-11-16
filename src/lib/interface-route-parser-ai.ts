@@ -42,12 +42,16 @@ const ParsedConfigRequestSchema = z.object({
 // AI prompt for parsing interface/route requests
 const configParsePrompt = ai.definePrompt({
   name: 'configParsePrompt',
-  inputSchema: z.object({
-    query: z.string().describe('The natural language interface or route configuration request'),
-  }),
-  outputSchema: ParsedConfigRequestSchema,
+  input: {
+    schema: z.object({
+      query: z.string().describe('The natural language interface or route configuration request'),
+    }),
+  },
+  output: {
+    schema: ParsedConfigRequestSchema,
+  },
+  model: 'googleai/gemini-2.5-flash',
   config: {
-    model: 'googleai/gemini-2.5-flash',
     temperature: 0.1, // Low temperature for consistent extraction
   },
   prompt: `You are an expert network configuration parser. Extract structured information from natural language interface and route configuration requests.
@@ -139,7 +143,7 @@ export class AIInterfaceRouteParser {
   static async parse(query: string): Promise<ParseResult> {
     try {
       // Call the AI prompt to extract configuration information
-      const result = await configParsePrompt({ query });
+      const result = await configParsePrompt({ input: { query } });
 
       if (!result.output) {
         return {

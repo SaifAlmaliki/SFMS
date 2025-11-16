@@ -28,12 +28,16 @@ const ParsedPolicyRequestSchema = z.object({
 // Define the AI prompt for policy parsing
 const policyParsePrompt = ai.definePrompt({
   name: 'policyParsePrompt',
-  inputSchema: z.object({
-    query: z.string().describe('The natural language firewall policy request'),
-  }),
-  outputSchema: ParsedPolicyRequestSchema,
+  input: {
+    schema: z.object({
+      query: z.string().describe('The natural language firewall policy request'),
+    }),
+  },
+  output: {
+    schema: ParsedPolicyRequestSchema,
+  },
+  model: 'googleai/gemini-2.5-flash',
   config: {
-    model: 'googleai/gemini-2.5-flash',
     temperature: 0.1, // Low temperature for consistent extraction
   },
   prompt: `You are an expert firewall policy parser. Extract structured information from natural language firewall policy requests.
@@ -87,7 +91,7 @@ export class AIPolicyRequestParser {
   static async parse(query: string): Promise<ParseResult> {
     try {
       // Call the AI prompt to extract policy information
-      const result = await policyParsePrompt({ query });
+      const result = await policyParsePrompt({ input: { query } });
 
       if (!result.output) {
         return {

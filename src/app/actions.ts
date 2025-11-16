@@ -1770,10 +1770,24 @@ export async function getResourceUsageAction() {
 
           if (result.success && result.data) {
             const data = result.data;
-            // Handle different response formats
-            const cpu = data.cpu?.usage ?? data.cpu_usage ?? data.cpu ?? 0;
-            const memory = data.memory?.usage ?? data.mem_usage ?? data.memory ?? 0;
-            const disk = data.disk?.usage ?? data.disk_usage ?? data.disk ?? 0;
+            
+            // Parse the API response structure: cpu[0].current, mem[0].current, disk[0].current
+            // The base client already extracts 'results', so result.data is the results object
+            const cpu = data.cpu?.[0]?.current ?? 
+                       data.cpu?.usage ?? 
+                       data.cpu_usage ?? 
+                       (typeof data.cpu === 'number' ? data.cpu : 0);
+            
+            const memory = data.mem?.[0]?.current ?? 
+                          data.memory?.[0]?.current ??
+                          data.memory?.usage ?? 
+                          data.mem_usage ?? 
+                          (typeof data.memory === 'number' ? data.memory : 0);
+            
+            const disk = data.disk?.[0]?.current ?? 
+                        data.disk?.usage ?? 
+                        data.disk_usage ?? 
+                        (typeof data.disk === 'number' ? data.disk : 0);
 
             return {
               deviceName: device.name,
