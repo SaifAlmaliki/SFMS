@@ -937,9 +937,67 @@ export async function testFortiGateConnection(input: z.infer<typeof fortigateCon
         url: `https://${validated.hostname}/api/v2/monitor/system/status`,
       });
       
+      // Update device status to Inactive if device exists
+      let deviceUpdated = false;
+      if (validated.deviceName) {
+        try {
+          console.log('[Connection Test] Attempting to update device status for:', {
+            deviceName: validated.deviceName,
+            hostname: validated.hostname,
+          });
+          
+          const existingDevice = await prisma.device.findFirst({
+            where: {
+              vendor: 'fortigate',
+              OR: [
+                { name: validated.deviceName },
+                { ip: validated.hostname },
+              ],
+            },
+          });
+
+          if (existingDevice) {
+            console.log('[Connection Test] Found existing device:', {
+              id: existingDevice.id,
+              name: existingDevice.name,
+              ip: existingDevice.ip,
+              currentStatus: existingDevice.status,
+            });
+            
+            const updatedDevice = await prisma.device.update({
+              where: { id: existingDevice.id },
+              data: {
+                status: 'Inactive',
+                updatedAt: new Date(),
+              },
+            });
+            
+            console.log('[Connection Test] Device status updated to Inactive:', {
+              id: updatedDevice.id,
+              name: updatedDevice.name,
+              newStatus: updatedDevice.status,
+            });
+            
+            deviceUpdated = true;
+            revalidatePath('/settings');
+          } else {
+            console.log('[Connection Test] No existing device found to update:', {
+              searchedName: validated.deviceName,
+              searchedIP: validated.hostname,
+            });
+          }
+        } catch (updateError) {
+          // Log update error but don't fail the connection test response
+          console.error('[Connection Test] Error updating device status on connection failure:', updateError);
+        }
+      } else {
+        console.log('[Connection Test] No deviceName provided, skipping status update');
+      }
+      
       return {
         success: false,
         error: result.error || `Connection failed (HTTP ${result.httpStatus || result.status || 'unknown'})`,
+        deviceUpdated, // Indicate if device status was updated
       };
     }
   } catch (e) {
@@ -958,9 +1016,70 @@ export async function testFortiGateConnection(input: z.infer<typeof fortigateCon
     
     console.error('Full error details:', { errorMessage, errorStack });
     
+    // Update device status to Inactive if device exists and connection failed
+    // Only update if it's not a validation error (validation errors happen before connection attempt)
+    let deviceUpdated = false;
+    if (!(e instanceof z.ZodError)) {
+      try {
+        const validated = fortigateConnectionSchema.safeParse(input);
+        
+        if (validated.success && validated.data.deviceName) {
+          console.log('[Connection Error] Attempting to update device status for:', {
+            deviceName: validated.data.deviceName,
+            hostname: validated.data.hostname,
+          });
+          
+          const existingDevice = await prisma.device.findFirst({
+            where: {
+              vendor: 'fortigate',
+              OR: [
+                { name: validated.data.deviceName },
+                { ip: validated.data.hostname },
+              ],
+            },
+          });
+
+          if (existingDevice) {
+            console.log('[Connection Error] Found existing device:', {
+              id: existingDevice.id,
+              name: existingDevice.name,
+              ip: existingDevice.ip,
+              currentStatus: existingDevice.status,
+            });
+            
+            const updatedDevice = await prisma.device.update({
+              where: { id: existingDevice.id },
+              data: {
+                status: 'Inactive',
+                updatedAt: new Date(),
+              },
+            });
+            
+            console.log('[Connection Error] Device status updated to Inactive:', {
+              id: updatedDevice.id,
+              name: updatedDevice.name,
+              newStatus: updatedDevice.status,
+            });
+            
+            deviceUpdated = true;
+            revalidatePath('/settings');
+          } else {
+            console.log('[Connection Error] No existing device found to update:', {
+              searchedName: validated.data.deviceName,
+              searchedIP: validated.data.hostname,
+            });
+          }
+        }
+      } catch (updateError) {
+        // Log update error but don't fail the error response
+        console.error('[Connection Error] Error updating device status on connection error:', updateError);
+      }
+    }
+    
     return {
       success: false,
       error: errorMessage || 'Unknown error occurred. Check server logs for details.',
+      deviceUpdated, // Indicate if device status was updated
     };
   }
 }

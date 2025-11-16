@@ -46,6 +46,7 @@ export function DeviceList() {
     try {
       const result = await getAllFortiGateDevices();
       if (result.success) {
+        console.log('[DeviceList] Loaded devices:', result.devices.map(d => ({ name: d.name, status: d.status })));
         setDevices(result.devices);
       } else {
         toast({
@@ -67,6 +68,21 @@ export function DeviceList() {
 
   useEffect(() => {
     loadDevices();
+    
+    // Listen for device status update events
+    const handleDeviceStatusUpdate = () => {
+      console.log('[DeviceList] Received deviceStatusUpdated event, refreshing devices...');
+      // Add a small delay to ensure database update is complete
+      setTimeout(() => {
+        loadDevices();
+      }, 100);
+    };
+    
+    window.addEventListener('deviceStatusUpdated', handleDeviceStatusUpdate);
+    
+    return () => {
+      window.removeEventListener('deviceStatusUpdated', handleDeviceStatusUpdate);
+    };
   }, []);
 
   const handleStatusChange = async (deviceId: string, newStatus: 'Active' | 'Inactive') => {

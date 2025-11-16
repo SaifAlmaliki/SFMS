@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -30,10 +31,12 @@ interface ConnectionStatus {
   version?: string;
   build?: number;
   saved?: boolean;
+  deviceUpdated?: boolean; // Indicates if device status was updated
 }
 
 export function FortiGateConnection() {
   const { toast } = useToast();
+  const router = useRouter();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -125,6 +128,17 @@ export function FortiGateConnection() {
           description: result.error || 'Unable to connect to FortiGate device',
           variant: 'destructive',
         });
+        // Trigger device list refresh if device status was updated
+        if (result.deviceUpdated) {
+          console.log('[FortiGateConnection] Device status was updated, refreshing device list...');
+          // First immediate refresh
+          window.dispatchEvent(new Event('deviceStatusUpdated'));
+          // Then refresh after delay to ensure DB update is complete
+          setTimeout(() => {
+            window.dispatchEvent(new Event('deviceStatusUpdated'));
+            router.refresh();
+          }, 1000);
+        }
       }
     } catch (error: any) {
       setConnectionStatus({
@@ -136,6 +150,16 @@ export function FortiGateConnection() {
         description: error.message || 'An unexpected error occurred',
         variant: 'destructive',
       });
+      // Note: deviceUpdated will be in the error response if the catch block in the server action updated it
+      // For now, we'll trigger refresh if deviceName exists (the server action will handle the update)
+      if (formData.deviceName) {
+        console.log('[FortiGateConnection] Connection error occurred, triggering device list refresh...');
+        // Trigger refresh after delay to allow server action to complete
+        setTimeout(() => {
+          window.dispatchEvent(new Event('deviceStatusUpdated'));
+          router.refresh();
+        }, 1500);
+      }
     } finally {
       setIsConnecting(false);
     }
