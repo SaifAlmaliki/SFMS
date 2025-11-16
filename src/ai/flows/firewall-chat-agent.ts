@@ -15,6 +15,8 @@ import { searchKnowledgeBase } from '@/lib/knowledge-base-service';
 import { FortiGateClient, FortiGateDevice } from '@/lib/fortigate';
 import { convertFortiGateToPolicy } from '@/lib/fortigate-policy-converter';
 import { checkFortiGateAvailability } from '@/lib/fortigate-availability';
+import { AIInterfaceRouteParser } from '@/lib/interface-route-parser-ai';
+import { FortiGateInterfaceService, FortiGateRouteService } from '@/lib/fortigate-interface-route-service';
 
 const prisma = new PrismaClient();
 
@@ -231,15 +233,31 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
   // This prevents them from being misclassified as IT support
   const shouldListPolicies = isListPoliciesRequest(query);
   
+  // Check if this is an interface/route configuration request
+  const mightBeInterfaceRouteRequest = !shouldListPolicies && AIInterfaceRouteParser.isInterfaceRouteRequest(query);
+  
   // Check if this might be a policy request BEFORE classification
   // This ensures policy requests are detected even if classifier thinks it's IT support
-  const mightBePolicyRequest = !shouldListPolicies && isPolicyRequest(query);
+  const mightBePolicyRequest = !shouldListPolicies && !mightBeInterfaceRouteRequest && isPolicyRequest(query);
   
   let parsedRequest: any = null;
   let duplicateFound = false;
   let matchedPolicies: any[] = [];
   let missingJustification = false;
   let policiesList: any[] = [];
+  
+  // Try to parse interface/route request if it looks like one
+  let interfaceRouteResult: any = null;
+  let hasValidInterfaceRouteData = false;
+  
+  if (mightBeInterfaceRouteRequest) {
+    const parseResult = await AIInterfaceRouteParser.parse(query);
+    
+    if (parseResult.success && parseResult.data) {
+      hasValidInterfaceRouteData = true;
+      interfaceRouteResult = parseResult.data;
+    }
+  }
   
   // Try to parse the policy request if it looks like one
   // This happens BEFORE classification to ensure we catch policy requests
@@ -278,12 +296,12 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
     }
   }
   
-  // Only classify ticket if it's NOT a policy request (list or create)
-  // Skip classification entirely for policy-related requests
+  // Only classify ticket if it's NOT a policy request (list or create) AND NOT an interface/route request
+  // Skip classification entirely for policy-related and config-related requests
   let classification: any = null;
   let isITSupportRequest = false;
   
-  if (!shouldListPolicies && !hasValidPolicyData) {
+  if (!shouldListPolicies && !hasValidPolicyData && !hasValidInterfaceRouteData) {
     // Only run classification if we don't have a policy request
     classification = await classifyTicket(query);
     isITSupportRequest = classification.ticketType !== 'FirewallPolicy';
@@ -419,6 +437,162 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
   // Get vendor configuration for enhanced context
   const vendorConfig = getVendorById(vendor) || getDefaultVendor();
   
+  // Handle Interface/Route Configuration requests
+  let interfaceRouteResponse: string | null = null;
+  if (hasValidInterfaceRouteData && interfaceRouteResult) {
+    try {
+      // Get target device
+      const targetDeviceName = input.targetDevice || (await prisma.device.findFirst({
+        where: { vendor: 'fortigate', status: 'Active' },
+      }))?.name;
+
+      if (!targetDeviceName) {
+        interfaceRouteResponse = 'No FortiGate device found. Please configure a device first.';
+      } else {
+        const data = interfaceRouteResult;
+        
+        if (data.requestType === 'interface' && data.interface) {
+          const intf = data.interface;
+          
+          if (intf.intent === 'list_interfaces') {
+            const result = await FortiGateInterfaceService.getInterfaces(targetDeviceName, intf.vdom);
+            if (result.success) {
+              const interfaces = Array.isArray(result.data) ? result.data : [];
+              interfaceRouteResponse = `Found ${interfaces.length} interface(s):\n\n${interfaces.map((i: any) => 
+                `- ${i.name || 'Unknown'}: ${i.ip || 'No IP'} ${i.alias ? `(${i.alias})` : ''}`
+              ).join('\n')}`;
+            } else {
+              interfaceRouteResponse = `Failed to list interfaces: ${result.error}`;
+            }
+          } else if (intf.intent === 'create_interface') {
+            // Determine interface name
+            let interfaceName = intf.interfaceName;
+            if (!interfaceName && intf.interfaceType === 'vlan' && intf.vlanId) {
+              interfaceName = `vlan${intf.vlanId}`;
+            } else if (!interfaceName && intf.interfaceType === 'loopback') {
+              interfaceName = 'loopback1'; // Default
+            }
+            
+            if (!interfaceName) {
+              interfaceRouteResponse = 'Interface name is required. Please specify the interface name (e.g., port1, vlan100).';
+            } else {
+              const config = {
+                name: interfaceName,
+                type: intf.interfaceType || 'physical',
+                ip: intf.ipAddress,
+                mask: intf.subnetMask || (intf.ipAddress?.includes('/') ? undefined : '/24'),
+                vdom: intf.vdom,
+                alias: intf.alias,
+                parentInterface: intf.parentInterface,
+                vlanId: intf.vlanId,
+              };
+              
+              const result = await FortiGateInterfaceService.createInterface(
+                targetDeviceName,
+                config,
+                userId
+              );
+              
+              if (result.success) {
+                interfaceRouteResponse = `✅ Successfully created interface ${interfaceName}${config.ip ? ` with IP ${config.ip}${config.mask || ''}` : ''}${result.snapshotId ? ` (Snapshot ID: ${result.snapshotId})` : ''}`;
+              } else {
+                interfaceRouteResponse = `❌ Failed to create interface: ${result.error}${result.snapshotId ? ` (Snapshot ID: ${result.snapshotId} for rollback)` : ''}`;
+              }
+            }
+          } else if (intf.intent === 'update_interface') {
+            if (!intf.interfaceName) {
+              interfaceRouteResponse = 'Interface name is required for update operations.';
+            } else {
+              const config: any = {};
+              if (intf.ipAddress) config.ip = intf.ipAddress;
+              if (intf.subnetMask) config.mask = intf.subnetMask;
+              if (intf.alias) config.alias = intf.alias;
+              if (intf.vdom) config.vdom = intf.vdom;
+              
+              const result = await FortiGateInterfaceService.updateInterface(
+                targetDeviceName,
+                intf.interfaceName,
+                config,
+                userId
+              );
+              
+              if (result.success) {
+                interfaceRouteResponse = `✅ Successfully updated interface ${intf.interfaceName}${result.snapshotId ? ` (Snapshot ID: ${result.snapshotId})` : ''}`;
+              } else {
+                interfaceRouteResponse = `❌ Failed to update interface: ${result.error}${result.snapshotId ? ` (Snapshot ID: ${result.snapshotId} for rollback)` : ''}`;
+              }
+            }
+          } else if (intf.intent === 'delete_interface') {
+            if (!intf.interfaceName) {
+              interfaceRouteResponse = 'Interface name is required for delete operations.';
+            } else {
+              const result = await FortiGateInterfaceService.deleteInterface(
+                targetDeviceName,
+                intf.interfaceName,
+                intf.vdom,
+                userId
+              );
+              
+              if (result.success) {
+                interfaceRouteResponse = `✅ Successfully deleted interface ${intf.interfaceName}${result.snapshotId ? ` (Snapshot ID: ${result.snapshotId} for rollback)` : ''}`;
+              } else {
+                interfaceRouteResponse = `❌ Failed to delete interface: ${result.error}${result.snapshotId ? ` (Snapshot ID: ${result.snapshotId} for rollback)` : ''}`;
+              }
+            }
+          }
+        } else if (data.requestType === 'route' && data.route) {
+          const route = data.route;
+          
+          if (route.intent === 'list_routes') {
+            const result = await FortiGateRouteService.getStaticRoutes(targetDeviceName, route.vdom);
+            if (result.success) {
+              const routes = Array.isArray(result.data) ? result.data : [];
+              interfaceRouteResponse = `Found ${routes.length} static route(s):\n\n${routes.map((r: any) => 
+                `- ${r.dst || r.destination || 'Unknown'}: Gateway ${r.gateway || 'N/A'} via ${r.device || 'N/A'}`
+              ).join('\n')}`;
+            } else {
+              interfaceRouteResponse = `Failed to list routes: ${result.error}`;
+            }
+          } else if (route.intent === 'create_route') {
+            if (!route.destination || !route.gateway) {
+              interfaceRouteResponse = 'Destination network and gateway are required for creating a static route.';
+            } else {
+              const config = {
+                destination: route.destination,
+                gateway: route.gateway,
+                device: route.device,
+                distance: route.distance,
+                priority: route.priority,
+                vdom: route.vdom,
+                comment: route.comment,
+              };
+              
+              const result = await FortiGateRouteService.createStaticRoute(
+                targetDeviceName,
+                config,
+                userId
+              );
+              
+              if (result.success) {
+                interfaceRouteResponse = `✅ Successfully created static route: ${route.destination} via ${route.gateway}${result.data?.seqNum ? ` (Sequence: ${result.data.seqNum})` : ''}${result.snapshotId ? ` (Snapshot ID: ${result.snapshotId})` : ''}`;
+              } else {
+                interfaceRouteResponse = `❌ Failed to create static route: ${result.error}${result.snapshotId ? ` (Snapshot ID: ${result.snapshotId} for rollback)` : ''}`;
+              }
+            }
+          } else if (route.intent === 'update_route') {
+            // For update, we'd need sequence number - this is a limitation
+            interfaceRouteResponse = 'To update a route, please specify the route sequence number. Use "list routes" to find the sequence number.';
+          } else if (route.intent === 'delete_route') {
+            // For delete, we'd need sequence number
+            interfaceRouteResponse = 'To delete a route, please specify the route sequence number. Use "list routes" to find the sequence number.';
+          }
+        }
+      }
+    } catch (error: any) {
+      interfaceRouteResponse = `Error processing interface/route request: ${error.message || String(error)}`;
+    }
+  }
+
   // Handle IT Support requests
   if (isITSupportRequest) {
     // Create IT Support ticket
@@ -471,6 +645,28 @@ export async function firewallChatAgent(input: FirewallChatAgentInput): Promise<
     } catch (error) {
       console.error('Error creating IT support ticket:', error);
     }
+  }
+
+  // If we have an interface/route response, use it directly
+  if (interfaceRouteResponse) {
+    // Save AI response to conversation
+    await prisma.chatMessage.create({
+      data: {
+        conversationId: convId,
+        role: 'Assistant',
+        content: interfaceRouteResponse,
+      },
+    });
+
+    return {
+      response: interfaceRouteResponse,
+      conversationId: convId,
+      ticketCreated: false,
+      policyGenerated: false,
+      ticketType: classification?.ticketType || 'Other',
+      ticketCategory: classification?.category,
+      isITSupport: false,
+    };
   }
 
   // Build context for AI with vendor-specific information

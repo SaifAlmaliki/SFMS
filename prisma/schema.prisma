@@ -441,6 +441,33 @@ model AuditLog {
   userAgent  String?
 }
 
+// Configuration Snapshots for Interface and Route Rollback
+model InterfaceConfigSnapshot {
+  id          String   @id @default(cuid())
+  deviceName  String
+  vdom        String?
+  snapshot    Json     // Full interface configuration before change
+  createdAt   DateTime @default(now())
+  createdBy   String
+  action      String   // 'create', 'update', 'delete'
+  interfaceName String?
+  
+  @@index([deviceName, createdAt])
+}
+
+model RouteConfigSnapshot {
+  id          String   @id @default(cuid())
+  deviceName  String
+  vdom        String?
+  snapshot    Json     // Full static route configuration before change
+  createdAt   DateTime @default(now())
+  createdBy   String
+  action      String   // 'create', 'update', 'delete'
+  routeSeqNum Int?
+  
+  @@index([deviceName, createdAt])
+}
+
 // Knowledge Base for IT Support Tickets
 model KnowledgeBase {
   id            String   @id @default(cuid())
