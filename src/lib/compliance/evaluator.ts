@@ -5,6 +5,7 @@
 
 import 'server-only';
 import { PrismaClient } from '../../generated/prisma';
+import { getAIComplianceInsights, type ComplianceAIOutput } from '@/ai/flows/compliance-ai-analyzer';
 
 const prisma = new PrismaClient();
 
@@ -15,6 +16,24 @@ export interface EvaluationResult {
   score?: number;
   details: string;
   evidenceRefs: any[];
+  aiInsights?: {
+    riskScore: number;
+    aiSummary: string;
+    keyFindings: string[];
+    violations: Array<{
+      severity: 'Low' | 'Medium' | 'High' | 'Critical';
+      description: string;
+      recommendation: string;
+      evidenceRef?: string;
+    }>;
+    recommendations: Array<{
+      priority: 'Low' | 'Medium' | 'High' | 'Critical';
+      action: string;
+      businessImpact: string;
+      estimatedEffort: string;
+    }>;
+    nextSteps: string[];
+  };
 }
 
 export interface FrameworkEvaluationResult {
@@ -22,6 +41,7 @@ export interface FrameworkEvaluationResult {
   status: 'Compliant' | 'NeedsReview' | 'NonCompliant';
   coverage: number;
   controlResults: EvaluationResult[];
+  aiInsights?: ComplianceAIOutput;
 }
 
 /**
@@ -367,11 +387,21 @@ export async function evaluateFramework(frameworkName: string): Promise<Framewor
     overallStatus = 'NeedsReview';
   }
 
+  // Get AI insights for the framework
+  let aiInsights: ComplianceAIOutput | undefined;
+  try {
+    aiInsights = await getAIComplianceInsights(frameworkName);
+    console.log(`AI insights generated for ${frameworkName}`);
+  } catch (error) {
+    console.error(`Failed to get AI insights for ${frameworkName}:`, error);
+  }
+
   return {
     frameworkId: frameworkName,
     status: overallStatus,
     coverage,
-    controlResults
+    controlResults,
+    aiInsights
   };
 }
 
