@@ -387,13 +387,16 @@ export async function evaluateFramework(frameworkName: string): Promise<Framewor
     overallStatus = 'NeedsReview';
   }
 
-  // Get AI insights for the framework
+  // Get AI insights for the framework (optional - don't fail if AI is unavailable)
   let aiInsights: ComplianceAIOutput | undefined;
   try {
+    console.log(`Attempting to get AI insights for ${frameworkName}...`);
     aiInsights = await getAIComplianceInsights(frameworkName);
-    console.log(`AI insights generated for ${frameworkName}`);
+    console.log(`✓ AI insights generated for ${frameworkName}`);
   } catch (error) {
-    console.error(`Failed to get AI insights for ${frameworkName}:`, error);
+    console.warn(`⚠️ AI insights unavailable for ${frameworkName}:`, error instanceof Error ? error.message : error);
+    // Continue without AI insights - this is not a critical failure
+    aiInsights = undefined;
   }
 
   return {

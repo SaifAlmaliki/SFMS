@@ -159,25 +159,15 @@ export default function CompliancePage() {
             Track your compliance status against various security frameworks with AI-powered insights.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button 
-            onClick={() => runAIAnalysis()} 
-            disabled={isAnalyzing || isRefreshing}
-            variant="secondary"
-          >
-            {isAnalyzing && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
-            {!isAnalyzing && <Brain className="mr-2 h-4 w-4" />}
-            AI Analysis
-          </Button>
-          <Button 
-            onClick={refreshData} 
-            disabled={isRefreshing || isAnalyzing}
-            variant="outline"
-          >
-            {isRefreshing && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
-            Refresh Data
-          </Button>
-        </div>
+        <Button 
+          onClick={refreshData} 
+          disabled={isRefreshing}
+          variant="outline"
+        >
+          {isRefreshing && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+          {!isRefreshing && <Brain className="mr-2 h-4 w-4" />}
+          Refresh Data & AI Analysis
+        </Button>
       </div>
 
       <Card>
