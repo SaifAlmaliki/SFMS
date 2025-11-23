@@ -1,4 +1,7 @@
 
+'use client';
+
+import { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -16,7 +19,9 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { getComplianceReports } from '@/lib/data';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 
 const statusStyles = {
@@ -25,14 +30,104 @@ const statusStyles = {
   'Non-Compliant': 'bg-destructive text-destructive-foreground',
 };
 
-export default async function CompliancePage() {
-  const complianceReports = await getComplianceReports();
+export default function CompliancePage() {
+  const [complianceReports, setComplianceReports] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { toast } = useToast();
+
+  const fetchComplianceData = async () => {
+    try {
+      const response = await fetch('/api/compliance/reports');
+      if (response.ok) {
+        const data = await response.json();
+        setComplianceReports(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch compliance data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const refreshData = async () => {
+    setIsRefreshing(true);
+    try {
+      // Run ingestion first
+      const ingestionResponse = await fetch('/api/ingestion/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'full' })
+      });
+      
+      const ingestionResult = await ingestionResponse.json();
+      
+      // Run evaluation
+      const evaluationResponse = await fetch('/api/compliance/evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'all' })
+      });
+      
+      const evaluationResult = await evaluationResponse.json();
+      
+      if (ingestionResult.success && evaluationResult.success) {
+        toast({
+          title: 'Data Refreshed Successfully',
+          description: `Processed ${ingestionResult.devicesProcessed || 0} devices and evaluated ${evaluationResult.result?.frameworksEvaluated || 0} frameworks`
+        });
+        
+        // Refresh the compliance data
+        await fetchComplianceData();
+      } else {
+        toast({
+          title: 'Refresh Failed',
+          description: 'Some operations failed. Check console for details.',
+          variant: 'destructive'
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Refresh Error',
+        description: error.message,
+        variant: 'destructive'
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchComplianceData();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Compliance Management</h1>
+        <p className="text-muted-foreground">Loading compliance data...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Compliance Management</h1>
-      <p className="text-muted-foreground">
-        Track your compliance status against various security frameworks.
-      </p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-2xl font-bold">Compliance Management</h1>
+          <p className="text-muted-foreground">
+            Track your compliance status against various security frameworks.
+          </p>
+        </div>
+        <Button 
+          onClick={refreshData} 
+          disabled={isRefreshing}
+          variant="outline"
+        >
+          {isRefreshing && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+          Refresh Data
+        </Button>
+      </div>
 
       <Card>
         <CardHeader>
