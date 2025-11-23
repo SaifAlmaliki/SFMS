@@ -4,6 +4,8 @@
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
+// Note: Using Prisma v6 format - v7 warnings can be ignored
+
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
@@ -84,6 +86,11 @@ model Device {
   lastSync    DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
+  
+  // Relations
+  firewallEvents   FirewallEvent[]
+  firewallSnapshots FirewallSnapshot[]
+  ingestionRuns    IngestionRun[]
 }
 
 enum DeviceStatus {
@@ -159,6 +166,8 @@ model ComplianceFramework {
   
   // Relationship to controls
   controls    ComplianceControl[]
+  evaluations ComplianceFrameworkStatus?
+  results     ComplianceControlResult[]
 }
 
 enum ComplianceStatus {
@@ -178,6 +187,7 @@ model ComplianceControl {
   
   // Relationship to framework
   framework     ComplianceFramework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  results       ComplianceControlResult[]
   
   @@unique([controlId, frameworkId])
 }
@@ -186,6 +196,58 @@ enum ComplianceControlStatus {
   Compliant
   NeedsReview @map("Needs Review")
   NonCompliant @map("Non-Compliant")
+}
+
+model ComplianceFrameworkStatus {
+  id           String @id @default(cuid())
+  frameworkId  String @unique
+  status       ComplianceStatus
+  coverage     Int
+  lastAudit    DateTime
+  updatedAt    DateTime @updatedAt
+  notes        String? @db.Text
+
+  framework    ComplianceFramework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+}
+
+model ComplianceControlResult {
+  id               String @id @default(cuid())
+  controlRecordId  String
+  frameworkId      String
+  status           ComplianceControlStatus
+  score            Int?
+  evaluatedAt      DateTime @default(now())
+  evidenceRefs     Json?
+  details          String? @db.Text
+  evaluationRunId  String?
+
+  control          ComplianceControl @relation(fields: [controlRecordId], references: [id], onDelete: Cascade)
+  framework        ComplianceFramework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  evaluationRun    ComplianceEvaluationRun? @relation(fields: [evaluationRunId], references: [id], onDelete: SetNull)
+
+  @@index([frameworkId])
+  @@index([controlRecordId, evaluatedAt])
+}
+
+model ComplianceEvaluationRun {
+  id                 String @id @default(cuid())
+  startedAt          DateTime @default(now())
+  completedAt        DateTime?
+  status             EvaluationRunStatus
+  triggeredBy        String?
+  controlsEvaluated  Int @default(0)
+  frameworksUpdated  Int @default(0)
+  error              String? @db.Text
+  notes              String? @db.Text
+
+  results            ComplianceControlResult[]
+}
+
+enum EvaluationRunStatus {
+  Pending
+  Running
+  Success
+  Failed
 }
 
 model ActivityLog {
@@ -355,6 +417,83 @@ enum LogSeverity {
   Info
   Warning
   Critical
+}
+
+model FirewallEvent {
+  id             String          @id @default(cuid())
+  deviceId       String?
+  sourceEndpoint String
+  severity       EventSeverity
+  eventTime      DateTime
+  ingestedAt     DateTime        @default(now())
+  payload        Json
+  hash           String          @unique
+
+  device         Device?         @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([deviceId, eventTime])
+  @@index([sourceEndpoint, eventTime])
+}
+
+enum EventSeverity {
+  Info
+  Low
+  Medium
+  High
+  Critical
+}
+
+model FirewallSnapshot {
+  id            String       @id @default(cuid())
+  deviceId      String?
+  snapshotType  SnapshotType
+  version       String?
+  capturedAt    DateTime     @default(now())
+  payload       Json
+  diffFromPrev  Json?
+
+  device        Device?      @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([deviceId, snapshotType, capturedAt])
+}
+
+enum SnapshotType {
+  ConfigGlobal
+  ConfigPolicy
+  Routing
+  UserDirectory
+  Certificates
+  Other
+}
+
+model IngestionRun {
+  id           String           @id @default(cuid())
+  jobType      IngestionJobType
+  startedAt    DateTime         @default(now())
+  completedAt  DateTime?
+  status       IngestionStatus
+  itemsFetched Int              @default(0)
+  lastCursor   String?
+  error        String?          @db.Text
+  deviceId     String?
+
+  device       Device?          @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+}
+
+enum IngestionJobType {
+  TrafficLog
+  ThreatLog
+  SystemEvent
+  ConfigSnapshot
+  UserActivity
+  Alert
+}
+
+enum IngestionStatus {
+  Pending
+  Running
+  Success
+  Failed
 }
 
 model Alert {
