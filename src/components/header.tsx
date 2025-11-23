@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Moon, Sun, Monitor } from 'lucide-react';
+import { Moon, Sun, Monitor } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,10 +31,6 @@ export function AppHeader() {
     <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">
       {isMobile && <SidebarTrigger />}
       <div className="flex-1" />
-      <Button variant="ghost" size="icon" className="rounded-full">
-        <Bell className="h-5 w-5" />
-        <span className="sr-only">Toggle notifications</span>
-      </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="rounded-full">
