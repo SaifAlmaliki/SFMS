@@ -18,6 +18,10 @@ import {
   ChevronDown,
   Layers,
   UserCheck,
+  User,
+  Moon,
+  Sun,
+  Monitor,
 } from 'lucide-react';
 import {
   SidebarHeader,
@@ -27,20 +31,41 @@ import {
   SidebarContent,
   SidebarFooter,
 } from '@/components/ui/sidebar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuPortal,
+  DropdownMenuSubContent
+} from '@/components/ui/dropdown-menu';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
+import { useTheme } from 'next-themes';
+import placeholderImages from '@/lib/placeholder-images.json';
 
 export function SidebarNav() {
   const pathname = usePathname();
+  const { setTheme } = useTheme();
   const isPolicyOpen = pathname.startsWith('/policies') || pathname.startsWith('/templates');
   const isSupportOpen = pathname.startsWith('/support') || pathname.startsWith('/admin/knowledge-base');
   const [openCollapsibles, setOpenCollapsibles] = useState({
       policy: isPolicyOpen,
       support: isSupportOpen,
   });
+
+  const userAvatar = placeholderImages.placeholderImages.find(
+    (img) => img.id === 'user-avatar'
+  );
 
   return (
     <>
@@ -228,12 +253,47 @@ export function SidebarNav() {
       <SidebarFooter className="p-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname === '/settings'} tooltip="Settings">
-              <Link href="/settings">
-                <Settings />
-                Settings
-              </Link>
-            </SidebarMenuButton>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton tooltip="Profile">
+                  <Avatar className="h-6 w-6">
+                    <AvatarImage src={userAvatar?.imageUrl} alt="User Avatar" />
+                    <AvatarFallback>AD</AvatarFallback>
+                  </Avatar>
+                  Admin
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" side="right">
+                <DropdownMenuLabel>Admin</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>Profile</DropdownMenuItem>
+                <DropdownMenuItem>Billing</DropdownMenuItem>
+                <DropdownMenuItem>Settings</DropdownMenuItem>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    Theme
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuPortal>
+                    <DropdownMenuSubContent>
+                      <DropdownMenuItem onClick={() => setTheme('light')}>
+                        <Sun className="mr-2 h-4 w-4" />
+                        Light
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setTheme('dark')}>
+                        <Moon className="mr-2 h-4 w-4" />
+                        Dark
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setTheme('system')}>
+                        <Monitor className="mr-2 h-4 w-4" />
+                        System
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuPortal>
+                </DropdownMenuSub>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>Log out</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
