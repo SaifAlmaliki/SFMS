@@ -45,39 +45,35 @@ export type ComplianceAIOutput = z.infer<typeof ComplianceAIOutputSchema>;
  * Get relevant data for AI analysis
  */
 async function getComplianceContext(frameworkName: string, controlId?: string, deviceId?: string) {
-  // Get recent firewall events
-  const recentEvents = await prisma.firewallEvent.findMany({
-    where: deviceId ? { deviceId } : {},
-    orderBy: { eventTime: 'desc' },
-    take: 50,
-    include: { device: true }
-  });
-
-  // Get configuration snapshots
-  const configSnapshots = await prisma.firewallSnapshot.findMany({
-    where: {
-      ...(deviceId && { deviceId }),
-      snapshotType: { in: ['ConfigGlobal', 'ConfigPolicy'] }
-    },
-    orderBy: { capturedAt: 'desc' },
-    take: 10,
-    include: { device: true }
-  });
-
-  // Get framework and controls
   const framework = await prisma.complianceFramework.findFirst({
     where: { name: frameworkName },
     include: {
       controls: {
-        where: controlId ? { controlId } : {},
-        include: {
-          results: {
-            orderBy: { evaluatedAt: 'desc' },
-            take: 5
-          }
-        }
+        where: controlId ? { id: controlId } : {},
+        include: { results: { orderBy: { evaluatedAt: 'desc' }, take: 3 } }
       }
     }
+  });
+
+  // Get recent firewall events for context
+  const recentEvents = await prisma.firewallEvent.findMany({
+    where: deviceId ? { deviceId } : {},
+    orderBy: { eventTime: 'desc' },
+    take: 20,
+    include: { device: true }
+  });
+
+  // Get recent configuration snapshots
+  const configSnapshots = await prisma.firewallSnapshot.findMany({
+    where: {
+      AND: [
+        deviceId ? { deviceId } : {},
+        { snapshotType: { in: ['ConfigGlobal', 'ConfigPolicy'] } }
+      ]
+    },
+    orderBy: { capturedAt: 'desc' },
+    take: 5,
+    include: { device: true }
   });
 
   // Get recent ingestion runs for context
@@ -88,14 +84,28 @@ async function getComplianceContext(frameworkName: string, controlId?: string, d
     include: { device: true }
   });
 
+  const deviceCount = await prisma.device.count({ where: { status: 'Active' } });
+
+  // Check if we have active devices but no data (firewall offline scenario)
+  if (deviceCount === 0) {
+    // No active devices configured
+    throw new Error('No active firewall devices configured. Please add and activate devices in Settings.');
+  }
+
+  if (recentEvents.length === 0 && configSnapshots.length === 0) {
+    // We have active devices but no data - likely offline
+    throw new Error('Firewall devices are offline or disconnected. AI analysis requires active firewall connection to analyze security data.');
+  }
+
   return {
     framework,
     recentEvents,
     configSnapshots,
     recentIngestions,
-    deviceCount: await prisma.device.count({ where: { status: 'Active' } })
+    deviceCount
   };
 }
+
 
 /**
  * Generate compliance framework-specific prompts
@@ -172,7 +182,7 @@ export const analyzeComplianceWithAI = ai.defineFlow(
         type: s.snapshotType,
         capturedAt: s.capturedAt,
         payload: s.payload,
-        deviceName: s.device?.name
+        deviceName: (s as any).device?.name
       })),
       ingestionStatus: context.recentIngestions.map(i => ({
         status: i.status,

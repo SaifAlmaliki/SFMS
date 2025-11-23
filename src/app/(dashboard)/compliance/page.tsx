@@ -218,7 +218,7 @@ export default function CompliancePage() {
         </CardContent>
       </Card>
 
-      {aiInsights && Object.keys(aiInsights).length > 0 && (
+      {aiInsights && Object.keys(aiInsights).length > 0 ? (
         <div className="space-y-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <Brain className="h-5 w-5" />
@@ -341,6 +341,33 @@ export default function CompliancePage() {
             </Card>
           ))}
         </div>
+      ) : (
+        // Show message when AI insights are not available
+        complianceReports.length > 0 && (
+          <Card className="border-l-4 border-l-orange-500">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Brain className="h-5 w-5" />
+                AI-Powered Compliance Insights
+              </CardTitle>
+              <CardDescription>
+                AI analysis is currently unavailable
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3 text-muted-foreground">
+                <AlertTriangle className="h-5 w-5 text-orange-500" />
+                <div>
+                  <p className="font-medium">Firewall Connection Required</p>
+                  <p className="text-sm">
+                    AI compliance analysis requires active firewall devices to analyze security data. 
+                    Please ensure your firewall devices are online and connected.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
       )}
     </div>
   );
