@@ -52,6 +52,42 @@ export default function CompliancePage() {
     }
   };
 
+  // Fetch persisted AI insights from database
+  const fetchPersistedInsights = async () => {
+    try {
+      const response = await fetch('/api/compliance/ai-insights');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.count > 0) {
+          console.log('[Compliance UI] Loaded persisted AI insights:', data.insights);
+          setAiInsights(data.insights);
+          
+          // Update compliance reports with AI-derived status
+          setComplianceReports(prevReports => 
+            prevReports.map(report => {
+              const aiInsight = data.insights[report.framework];
+              if (aiInsight) {
+                const statusMap: Record<string, string> = {
+                  'Compliant': 'Compliant',
+                  'NeedsReview': 'Needs Review',
+                  'NonCompliant': 'Non-Compliant'
+                };
+                return {
+                  ...report,
+                  status: statusMap[aiInsight.overallStatus] || report.status,
+                  coverage: Math.max(0, Math.min(100, Math.round((10 - aiInsight.riskScore) * 10)))
+                };
+              }
+              return report;
+            })
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch persisted AI insights:', error);
+    }
+  };
+
   const runAIAnalysis = async (frameworkName?: string) => {
     setIsAnalyzing(true);
     try {
@@ -205,7 +241,12 @@ export default function CompliancePage() {
   };
 
   useEffect(() => {
-    fetchComplianceData();
+    const loadData = async () => {
+      await fetchComplianceData();
+      // Load persisted AI insights after compliance data is loaded
+      await fetchPersistedInsights();
+    };
+    loadData();
   }, []);
 
   if (isLoading) {
@@ -313,6 +354,12 @@ export default function CompliancePage() {
                       {insights?.riskScore}/10
                     </div>
                     <div className="text-sm text-muted-foreground">Risk Score</div>
+                    {insights?.analyzedAt && (
+                      <div className="text-xs text-muted-foreground mt-1 flex items-center justify-end gap-1">
+                        <Clock className="h-3 w-3" />
+                        {new Date(insights.analyzedAt).toLocaleString()}
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardHeader>

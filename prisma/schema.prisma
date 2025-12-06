@@ -206,6 +206,15 @@ model ComplianceFrameworkStatus {
   lastAudit    DateTime
   updatedAt    DateTime @updatedAt
   notes        String? @db.Text
+  
+  // AI Analysis Results (persisted)
+  aiRiskScore       Int?      // 1-10 risk score from AI
+  aiSummary         String?   @db.Text // AI-generated summary
+  aiKeyFindings     Json?     // Array of key findings
+  aiViolations      Json?     // Array of violation objects
+  aiRecommendations Json?     // Array of recommendation objects
+  aiNextSteps       Json?     // Array of next steps
+  aiAnalyzedAt      DateTime? // When AI analysis was performed
 
   framework    ComplianceFramework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
 }
@@ -632,3 +641,4 @@ model AuditReport {
   format      String   // "json", "csv", "pdf"
   createdAt   DateTime @default(now())
 }
+

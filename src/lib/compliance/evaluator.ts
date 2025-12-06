@@ -447,23 +447,39 @@ export async function runComplianceEvaluation(): Promise<{
           aiInsights[framework.name] = result.aiInsights;
         }
 
-        // Update framework status
+        // Update framework status with AI insights
+        const aiData = result.aiInsights ? {
+          aiRiskScore: result.aiInsights.riskScore,
+          aiSummary: result.aiInsights.aiSummary,
+          aiKeyFindings: result.aiInsights.keyFindings,
+          aiViolations: result.aiInsights.violations,
+          aiRecommendations: result.aiInsights.recommendations,
+          aiNextSteps: result.aiInsights.nextSteps,
+          aiAnalyzedAt: new Date()
+        } : {};
+
         await prisma.complianceFrameworkStatus.upsert({
           where: { frameworkId: framework.id },
           update: {
             status: result.status,
             coverage: result.coverage,
             lastAudit: new Date(),
-            notes: `Evaluated ${result.controlResults.length} controls`
+            notes: `Evaluated ${result.controlResults.length} controls`,
+            ...aiData
           },
           create: {
             frameworkId: framework.id,
             status: result.status,
             coverage: result.coverage,
             lastAudit: new Date(),
-            notes: `Initial evaluation of ${result.controlResults.length} controls`
+            notes: `Initial evaluation of ${result.controlResults.length} controls`,
+            ...aiData
           }
         });
+        
+        if (result.aiInsights) {
+          console.log(`[Evaluator] Saved AI insights for ${framework.name}`);
+        }
 
         // Store individual control results
         for (const controlResult of result.controlResults) {
