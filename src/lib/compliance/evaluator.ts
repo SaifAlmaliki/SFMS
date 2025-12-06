@@ -416,10 +416,12 @@ export async function runComplianceEvaluation(): Promise<{
   frameworksEvaluated: number;
   controlsEvaluated: number;
   errors: string[];
+  aiInsights: Record<string, any>;
 }> {
   const errors: string[] = [];
   let frameworksEvaluated = 0;
   let controlsEvaluated = 0;
+  const aiInsights: Record<string, any> = {};
 
   // Create evaluation run record
   const evaluationRun = await prisma.complianceEvaluationRun.create({
@@ -439,6 +441,11 @@ export async function runComplianceEvaluation(): Promise<{
       try {
         const result = await evaluateFramework(framework.name);
         frameworksEvaluated++;
+        
+        // Store AI insights for this framework
+        if (result.aiInsights) {
+          aiInsights[framework.name] = result.aiInsights;
+        }
 
         // Update framework status
         await prisma.complianceFrameworkStatus.upsert({
@@ -498,7 +505,8 @@ export async function runComplianceEvaluation(): Promise<{
       success: errors.length === 0,
       frameworksEvaluated,
       controlsEvaluated,
-      errors
+      errors,
+      aiInsights
     };
 
   } catch (error: any) {

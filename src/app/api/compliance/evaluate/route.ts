@@ -46,6 +46,10 @@ export async function POST(request: NextRequest) {
         break;
     }
 
+    // Log what we're returning
+    console.log('[Evaluate API] Returning result with aiInsights:', 
+      result?.aiInsights ? Object.keys(result.aiInsights) : 'none');
+    
     return NextResponse.json({
       success: true,
       result

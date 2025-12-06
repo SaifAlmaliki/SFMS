@@ -58,25 +58,47 @@ export default function CompliancePage() {
       const frameworks = frameworkName ? [frameworkName] : complianceReports.map(r => r.framework);
       const insights: any = {};
       
+      console.log('[Compliance UI] Running AI analysis for frameworks:', frameworks);
+      
       for (const framework of frameworks) {
-        const response = await fetch('/api/compliance/ai-analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ frameworkName: framework })
-        });
-        
-        if (response.ok) {
+        try {
+          console.log(`[Compliance UI] Analyzing ${framework}...`);
+          const response = await fetch('/api/compliance/ai-analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ frameworkName: framework })
+          });
+          
           const result = await response.json();
-          insights[framework] = result.aiInsights;
+          console.log(`[Compliance UI] ${framework} response:`, result);
+          
+          if (response.ok && result.aiInsights) {
+            insights[framework] = result.aiInsights;
+          } else if (result.error) {
+            console.warn(`[Compliance UI] ${framework} error:`, result.error);
+          }
+        } catch (frameworkError) {
+          console.error(`[Compliance UI] Failed to analyze ${framework}:`, frameworkError);
         }
       }
       
+      console.log('[Compliance UI] All insights:', insights);
       setAiInsights(insights);
-      toast({
-        title: 'AI Analysis Complete',
-        description: `Generated insights for ${Object.keys(insights).length} framework(s)`
-      });
+      
+      if (Object.keys(insights).length > 0) {
+        toast({
+          title: 'AI Analysis Complete',
+          description: `Generated insights for ${Object.keys(insights).length} framework(s)`
+        });
+      } else {
+        toast({
+          title: 'AI Analysis',
+          description: 'No insights generated. Check console for details.',
+          variant: 'destructive'
+        });
+      }
     } catch (error: any) {
+      console.error('[Compliance UI] AI Analysis failed:', error);
       toast({
         title: 'AI Analysis Failed',
         description: error.message,
@@ -108,17 +130,62 @@ export default function CompliancePage() {
       
       const evaluationResult = await evaluationResponse.json();
       
+      console.log('[Compliance UI] Ingestion result:', ingestionResult);
+      console.log('[Compliance UI] Evaluation result:', evaluationResult);
+      
+      // Refresh the compliance data regardless of partial errors
+      await fetchComplianceData();
+      
+      // Check if we have AI insights (even if there were some errors)
+      if (evaluationResult.result?.aiInsights && Object.keys(evaluationResult.result.aiInsights).length > 0) {
+        console.log('[Compliance UI] Using AI insights from evaluation:', evaluationResult.result.aiInsights);
+        const insights = evaluationResult.result.aiInsights;
+        setAiInsights(insights);
+        
+        // Update compliance reports with AI-derived status
+        setComplianceReports(prevReports => 
+          prevReports.map(report => {
+            const aiInsight = insights[report.framework];
+            if (aiInsight) {
+              // Map AI status to display format
+              const statusMap: Record<string, string> = {
+                'Compliant': 'Compliant',
+                'NeedsReview': 'Needs Review',
+                'NonCompliant': 'Non-Compliant'
+              };
+              return {
+                ...report,
+                status: statusMap[aiInsight.overallStatus] || report.status,
+                // Calculate coverage based on risk score (inverse relationship)
+                coverage: Math.max(0, Math.min(100, Math.round((10 - aiInsight.riskScore) * 10)))
+              };
+            }
+            return report;
+          })
+        );
+        
+        toast({
+          title: 'AI Analysis Complete',
+          description: `Generated insights for ${Object.keys(insights).length} framework(s)`
+        });
+      } else if (evaluationResult.success) {
+        // Fallback: Run AI analysis separately if not included in evaluation
+        console.log('[Compliance UI] No AI insights in evaluation result, running separate analysis...');
+        await runAIAnalysis();
+      }
+      
+      // Show appropriate toast based on results
       if (ingestionResult.success && evaluationResult.success) {
         toast({
           title: 'Data Refreshed Successfully',
           description: `Processed ${ingestionResult.devicesProcessed || 0} devices and evaluated ${evaluationResult.result?.frameworksEvaluated || 0} frameworks`
         });
-        
-        // Refresh the compliance data
-        await fetchComplianceData();
-        
-        // Run AI analysis automatically after refresh
-        await runAIAnalysis();
+      } else if (evaluationResult.result?.aiInsights) {
+        // Partial success - we have AI insights but some errors occurred
+        toast({
+          title: 'Refresh Completed with Warnings',
+          description: `Some operations had issues but AI analysis completed for ${Object.keys(evaluationResult.result.aiInsights).length} frameworks`,
+        });
       } else {
         toast({
           title: 'Refresh Failed',

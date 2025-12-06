@@ -169,48 +169,59 @@ export const analyzeComplianceWithAI = ai.defineFlow(
       throw new Error(`Framework ${frameworkName} not found`);
     }
 
-    // Prepare data for AI analysis
-    const analysisData = {
-      framework: context.framework,
-      recentEvents: context.recentEvents.map(e => ({
-        severity: e.severity,
-        eventTime: e.eventTime,
-        payload: e.payload,
-        deviceName: e.device?.name
-      })),
-      configurations: context.configSnapshots.map(s => ({
-        type: s.snapshotType,
-        capturedAt: s.capturedAt,
-        payload: s.payload,
-        deviceName: (s as any).device?.name
-      })),
-      ingestionStatus: context.recentIngestions.map(i => ({
-        status: i.status,
-        startedAt: i.startedAt,
-        itemsFetched: i.itemsFetched,
-        deviceName: i.device?.name
-      })),
-      deviceCount: context.deviceCount
-    };
+    // Prepare SUMMARIZED data for AI analysis (to avoid token limit issues)
+    // Count events by severity
+    const eventSummary = context.recentEvents.reduce((acc, e) => {
+      acc[e.severity] = (acc[e.severity] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    // Summarize configurations - just types and counts, not full payloads
+    const configSummary = context.configSnapshots.map(s => ({
+      type: s.snapshotType,
+      capturedAt: s.capturedAt,
+      deviceName: (s as any).device?.name
+    }));
+    
+    // Summarize ingestion status
+    const ingestionSummary = context.recentIngestions.map(i => ({
+      status: i.status,
+      startedAt: i.startedAt,
+      itemsFetched: i.itemsFetched,
+      deviceName: i.device?.name
+    }));
+    
+    // Summarize framework controls - just IDs and status, not full details
+    const controlsSummary = context.framework.controls?.map(c => ({
+      controlId: c.controlId,
+      description: c.description?.substring(0, 50),
+      latestResult: c.results?.[0]?.status || 'NotEvaluated'
+    })) || [];
 
     const frameworkPrompt = getFrameworkPrompt(frameworkName);
 
-    // Generate AI analysis
-    const response = await ai.generate({
-      model: 'googleai/gemini-2.5-flash',
-      prompt: `
-        You are a cybersecurity compliance expert analyzing firewall configurations and logs for ${frameworkName} compliance.
+    // Generate AI analysis with summarized data
+    console.log('[Compliance AI] Starting AI generation for framework:', frameworkName);
+    console.log('[Compliance AI] Controls count:', controlsSummary.length);
+    console.log('[Compliance AI] Events summary:', eventSummary);
+    
+    let response;
+    try {
+      response = await ai.generate({
+        model: 'googleai/gemini-2.5-flash',
+        prompt: `You are a cybersecurity compliance expert. Analyze this ${frameworkName} compliance data.
 
-        ${frameworkPrompt}
+${frameworkPrompt}
 
-        ANALYSIS DATA:
-        Framework: ${JSON.stringify(context.framework, null, 2)}
-        Recent Security Events (${context.recentEvents.length}): ${JSON.stringify(analysisData.recentEvents, null, 2)}
-        Configuration Snapshots (${context.configSnapshots.length}): ${JSON.stringify(analysisData.configurations, null, 2)}
-        Ingestion Status: ${JSON.stringify(analysisData.ingestionStatus, null, 2)}
-        Active Devices: ${context.deviceCount}
+DATA SUMMARY:
+- Framework: ${context.framework.name}
+- Active Devices: ${context.deviceCount}
+- Controls (${controlsSummary.length}): ${JSON.stringify(controlsSummary.slice(0, 10))}
+- Security Events: ${JSON.stringify(eventSummary)}
+- Config Snapshots: ${configSummary.length} snapshots from ${configSummary.map(c => c.deviceName).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'N/A'}
+- Ingestion Status: ${ingestionSummary.map(i => `${i.deviceName}: ${i.status}`).join(', ') || 'N/A'}
 
-        ANALYSIS REQUIREMENTS:
+ANALYSIS REQUIREMENTS:
         1. Determine overall compliance status: Compliant, NeedsReview, or NonCompliant
         2. Assign a risk score from 1-10 (1=low risk, 10=critical risk)
         3. Provide a clear, executive-level summary
@@ -246,16 +257,56 @@ export const analyzeComplianceWithAI = ai.defineFlow(
 
         Focus on practical, actionable insights. Respond with JSON only - no other text or formatting.
       `,
-      config: {
-        temperature: 0.3, // Lower temperature for more consistent compliance analysis
-        maxOutputTokens: 1024 // Reduced to prevent truncation
-      }
-    });
+        config: {
+          temperature: 0.3, // Lower temperature for more consistent compliance analysis
+          maxOutputTokens: 4096, // Increased to allow room for thinking + output
+          thinkingConfig: {
+            thinkingBudget: 0 // Disable thinking mode to get direct output
+          }
+        }
+      });
+      console.log('[Compliance AI] AI generation completed');
+      console.log('[Compliance AI] Response object:', JSON.stringify(response, null, 2).substring(0, 500));
+    } catch (genError: any) {
+      console.error('[Compliance AI] AI generation failed:', genError.message);
+      console.error('[Compliance AI] Full error:', genError);
+      throw genError;
+    }
 
     try {
+      // Try different ways to access the response text
       let responseText = response.text;
-      console.log('Raw AI response length:', responseText?.length || 0);
-      console.log('Raw AI response:', responseText);
+      
+      // If response.text is a function, call it
+      if (typeof response.text === 'function') {
+        responseText = (response as any).text();
+        console.log('[Compliance AI] response.text was a function');
+      }
+      
+      // Check for alternative response properties
+      if (!responseText && (response as any).output) {
+        responseText = JSON.stringify((response as any).output);
+        console.log('[Compliance AI] Using response.output instead');
+      }
+      
+      if (!responseText && (response as any).message?.content) {
+        // Handle message.content array format
+        const content = (response as any).message.content;
+        if (Array.isArray(content) && content.length > 0) {
+          responseText = content.map((c: any) => c.text || '').join('');
+        } else if (typeof content === 'string') {
+          responseText = content;
+        }
+        console.log('[Compliance AI] Using response.message.content');
+      }
+      
+      // Ensure responseText is a string
+      if (typeof responseText !== 'string') {
+        responseText = String(responseText || '');
+      }
+      
+      console.log('[Compliance AI] Raw response length:', responseText?.length || 0);
+      console.log('[Compliance AI] Raw response:', typeof responseText === 'string' ? responseText.substring(0, 200) : 'N/A');
       
       // Handle empty or null responses
       if (!responseText || responseText.trim().length === 0) {
@@ -299,12 +350,12 @@ export const analyzeComplianceWithAI = ai.defineFlow(
       return aiResult as ComplianceAIOutput;
     } catch (error) {
       // Enhanced fallback with better error handling
-      const responseText = response.text;
+      const responseText = typeof response.text === 'string' ? response.text : '';
       console.error('JSON parsing failed:', error);
       console.log('Failed response text:', responseText);
       
       // Try to extract useful information from the raw response
-      let extractedSummary = responseText.substring(0, 500);
+      let extractedSummary = responseText ? responseText.substring(0, 500) : '';
       let extractedStatus: 'Compliant' | 'NeedsReview' | 'NonCompliant' = 'NeedsReview';
       let extractedRiskScore = 5;
       
