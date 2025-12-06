@@ -1,11 +1,13 @@
 /**
  * AI-Enhanced Compliance Analysis Flow
  * Uses Gemini to provide intelligent compliance analysis with natural language insights
+ * Fetches REAL-TIME data directly from FortiGate API for accurate analysis
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { PrismaClient } from '../../generated/prisma';
+import { FortiGateClient, FortiGateDevice } from '@/lib/fortigate';
 
 const prisma = new PrismaClient();
 
@@ -42,7 +44,184 @@ const ComplianceAIOutputSchema = z.object({
 export type ComplianceAIOutput = z.infer<typeof ComplianceAIOutputSchema>;
 
 /**
- * Get relevant data for AI analysis
+ * Fetch REAL-TIME data from FortiGate API for compliance analysis
+ */
+async function fetchLiveFortiGateData(deviceId?: string) {
+  // Get active FortiGate devices from database
+  const devices = await prisma.device.findMany({
+    where: {
+      vendor: 'fortigate',
+      status: 'Active',
+      ...(deviceId ? { id: deviceId } : {})
+    }
+  });
+
+  if (devices.length === 0) {
+    throw new Error('No active FortiGate devices configured. Please add and activate devices in Settings.');
+  }
+
+  const liveData: {
+    devices: any[];
+    systemStatus: any[];
+    firewallPolicies: any[];
+    firewallSessions: any[];
+    resourceUsage: any[];
+    interfaces: any[];
+    licenseStatus: any[];
+    globalConfig: any[];
+    errors: string[];
+  } = {
+    devices: [],
+    systemStatus: [],
+    firewallPolicies: [],
+    firewallSessions: [],
+    resourceUsage: [],
+    interfaces: [],
+    licenseStatus: [],
+    globalConfig: [],
+    errors: []
+  };
+
+  // Fetch real-time data from each device
+  for (const device of devices) {
+    if (!device.apiKey) {
+      liveData.errors.push(`Device ${device.name}: No API key configured`);
+      continue;
+    }
+
+    const fortigateDevice: FortiGateDevice = {
+      id: device.id,
+      name: device.name,
+      ip: device.ip,
+      apiKey: device.apiKey,
+      version: device.version || undefined,
+    };
+
+    const client = new FortiGateClient(fortigateDevice);
+    
+    try {
+      console.log(`[Compliance AI] Fetching live data from ${device.name}...`);
+      
+      // Test connection first
+      const connectionTest = await client.testConnection();
+      if (!connectionTest.success) {
+        liveData.errors.push(`Device ${device.name}: Connection failed - ${connectionTest.error}`);
+        continue;
+      }
+
+      liveData.devices.push({
+        name: device.name,
+        ip: device.ip,
+        status: 'Online',
+        version: connectionTest.data?.version || device.version
+      });
+
+      // Fetch system status
+      const systemStatus = await client.monitor.getSystemStatus();
+      if (systemStatus.success) {
+        liveData.systemStatus.push({
+          device: device.name,
+          ...systemStatus.data
+        });
+      }
+
+      // Fetch firewall policies (CRITICAL for compliance)
+      const policies = await client.firewall.getPolicies();
+      if (policies.success && policies.data) {
+        const policyList = Array.isArray(policies.data) ? policies.data : [policies.data];
+        liveData.firewallPolicies.push({
+          device: device.name,
+          count: policyList.length,
+          policies: policyList.slice(0, 20).map((p: any) => ({
+            id: p.policyid,
+            name: p.name,
+            srcintf: p.srcintf,
+            dstintf: p.dstintf,
+            srcaddr: p.srcaddr,
+            dstaddr: p.dstaddr,
+            action: p.action,
+            status: p.status,
+            logtraffic: p.logtraffic,
+            utm_status: p['utm-status'],
+            ssl_ssh_profile: p['ssl-ssh-profile'],
+            av_profile: p['av-profile'],
+            ips_sensor: p['ips-sensor'],
+            application_list: p['application-list'],
+            webfilter_profile: p['webfilter-profile']
+          }))
+        });
+      }
+
+      // Fetch active sessions
+      const sessions = await client.monitor.getFirewallSessions();
+      if (sessions.success && sessions.data) {
+        liveData.firewallSessions.push({
+          device: device.name,
+          totalSessions: sessions.data.total || 0,
+          summary: sessions.data
+        });
+      }
+
+      // Fetch resource usage
+      const resources = await client.monitor.getResourceUsage();
+      if (resources.success && resources.data) {
+        liveData.resourceUsage.push({
+          device: device.name,
+          cpu: resources.data.cpu,
+          memory: resources.data.memory,
+          disk: resources.data.disk
+        });
+      }
+
+      // Fetch interface status
+      const interfaces = await client.monitor.getInterfaceStats();
+      if (interfaces.success && interfaces.data) {
+        liveData.interfaces.push({
+          device: device.name,
+          interfaces: interfaces.data
+        });
+      }
+
+      // Fetch license status
+      const license = await client.monitor.getLicenseStatus();
+      if (license.success && license.data) {
+        liveData.licenseStatus.push({
+          device: device.name,
+          ...license.data
+        });
+      }
+
+      // Fetch global system config
+      const globalConfig = await client.system.getGlobal();
+      if (globalConfig.success && globalConfig.data) {
+        liveData.globalConfig.push({
+          device: device.name,
+          hostname: globalConfig.data.hostname,
+          timezone: globalConfig.data.timezone,
+          admin_sport: globalConfig.data['admin-sport'],
+          admin_ssh_port: globalConfig.data['admin-ssh-port'],
+          admintimeout: globalConfig.data.admintimeout,
+          strong_crypto: globalConfig.data['strong-crypto'],
+          ssl_min_proto_version: globalConfig.data['ssl-min-proto-version']
+        });
+      }
+
+      console.log(`[Compliance AI] ✓ Live data fetched from ${device.name}`);
+    } catch (error: any) {
+      liveData.errors.push(`Device ${device.name}: ${error.message}`);
+      console.error(`[Compliance AI] Error fetching from ${device.name}:`, error.message);
+    }
+  }
+
+  if (liveData.devices.length === 0) {
+    throw new Error('Could not connect to any FortiGate devices. Please check device connectivity and API keys.');
+  }
+
+  return liveData;
+}
+
+/**
+ * Get relevant data for AI analysis - combines live FortiGate data with compliance framework info
  */
 async function getComplianceContext(frameworkName: string, controlId?: string, deviceId?: string) {
   const framework = await prisma.complianceFramework.findFirst({
@@ -55,54 +234,13 @@ async function getComplianceContext(frameworkName: string, controlId?: string, d
     }
   });
 
-  // Get recent firewall events for context
-  const recentEvents = await prisma.firewallEvent.findMany({
-    where: deviceId ? { deviceId } : {},
-    orderBy: { eventTime: 'desc' },
-    take: 20,
-    include: { device: true }
-  });
-
-  // Get recent configuration snapshots
-  const configSnapshots = await prisma.firewallSnapshot.findMany({
-    where: {
-      AND: [
-        deviceId ? { deviceId } : {},
-        { snapshotType: { in: ['ConfigGlobal', 'ConfigPolicy'] } }
-      ]
-    },
-    orderBy: { capturedAt: 'desc' },
-    take: 5,
-    include: { device: true }
-  });
-
-  // Get recent ingestion runs for context
-  const recentIngestions = await prisma.ingestionRun.findMany({
-    where: deviceId ? { deviceId } : {},
-    orderBy: { startedAt: 'desc' },
-    take: 5,
-    include: { device: true }
-  });
-
-  const deviceCount = await prisma.device.count({ where: { status: 'Active' } });
-
-  // Check if we have active devices but no data (firewall offline scenario)
-  if (deviceCount === 0) {
-    // No active devices configured
-    throw new Error('No active firewall devices configured. Please add and activate devices in Settings.');
-  }
-
-  if (recentEvents.length === 0 && configSnapshots.length === 0) {
-    // We have active devices but no data - likely offline
-    throw new Error('Firewall devices are offline or disconnected. AI analysis requires active firewall connection to analyze security data.');
-  }
+  // Fetch REAL-TIME data from FortiGate API
+  const liveData = await fetchLiveFortiGateData(deviceId);
 
   return {
     framework,
-    recentEvents,
-    configSnapshots,
-    recentIngestions,
-    deviceCount
+    liveData,
+    deviceCount: liveData.devices.length
   };
 }
 
@@ -169,30 +307,11 @@ export const analyzeComplianceWithAI = ai.defineFlow(
       throw new Error(`Framework ${frameworkName} not found`);
     }
 
-    // Prepare SUMMARIZED data for AI analysis (to avoid token limit issues)
-    // Count events by severity
-    const eventSummary = context.recentEvents.reduce((acc, e) => {
-      acc[e.severity] = (acc[e.severity] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    // Use LIVE data from FortiGate API
+    const liveData = context.liveData;
     
-    // Summarize configurations - just types and counts, not full payloads
-    const configSummary = context.configSnapshots.map(s => ({
-      type: s.snapshotType,
-      capturedAt: s.capturedAt,
-      deviceName: (s as any).device?.name
-    }));
-    
-    // Summarize ingestion status
-    const ingestionSummary = context.recentIngestions.map(i => ({
-      status: i.status,
-      startedAt: i.startedAt,
-      itemsFetched: i.itemsFetched,
-      deviceName: i.device?.name
-    }));
-    
-    // Summarize framework controls - just IDs and status, not full details
-    const controlsSummary = context.framework.controls?.map(c => ({
+    // Summarize framework controls
+    const controlsSummary = context.framework.controls?.map((c: any) => ({
       controlId: c.controlId,
       description: c.description?.substring(0, 50),
       latestResult: c.results?.[0]?.status || 'NotEvaluated'
@@ -200,26 +319,32 @@ export const analyzeComplianceWithAI = ai.defineFlow(
 
     const frameworkPrompt = getFrameworkPrompt(frameworkName);
 
-    // Generate AI analysis with summarized data
+    // Generate AI analysis with REAL-TIME FortiGate data
     console.log('[Compliance AI] Starting AI generation for framework:', frameworkName);
-    console.log('[Compliance AI] Controls count:', controlsSummary.length);
-    console.log('[Compliance AI] Events summary:', eventSummary);
+    console.log('[Compliance AI] Live devices:', liveData.devices.map((d: any) => d.name).join(', '));
+    console.log('[Compliance AI] Firewall policies count:', liveData.firewallPolicies.reduce((sum: number, d: any) => sum + d.count, 0));
     
     let response;
     try {
       response = await ai.generate({
         model: 'googleai/gemini-2.5-flash',
-        prompt: `You are a cybersecurity compliance expert. Analyze this ${frameworkName} compliance data.
+        prompt: `You are a cybersecurity compliance expert. Analyze this ${frameworkName} compliance data from LIVE FortiGate firewall.
 
 ${frameworkPrompt}
 
-DATA SUMMARY:
+REAL-TIME FORTIGATE DATA:
+- Connected Devices (${liveData.devices.length}): ${JSON.stringify(liveData.devices)}
+- System Status: ${JSON.stringify(liveData.systemStatus)}
+- Global Config: ${JSON.stringify(liveData.globalConfig)}
+- Resource Usage: ${JSON.stringify(liveData.resourceUsage)}
+- Firewall Policies: ${JSON.stringify(liveData.firewallPolicies.map((d: any) => ({ device: d.device, count: d.count, policies: d.policies?.slice(0, 5) })))}
+- Active Sessions: ${JSON.stringify(liveData.firewallSessions)}
+- License Status: ${JSON.stringify(liveData.licenseStatus)}
+- Connection Errors: ${liveData.errors.length > 0 ? liveData.errors.join('; ') : 'None'}
+
+COMPLIANCE CONTROLS:
 - Framework: ${context.framework.name}
-- Active Devices: ${context.deviceCount}
-- Controls (${controlsSummary.length}): ${JSON.stringify(controlsSummary.slice(0, 10))}
-- Security Events: ${JSON.stringify(eventSummary)}
-- Config Snapshots: ${configSummary.length} snapshots from ${configSummary.map(c => c.deviceName).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'N/A'}
-- Ingestion Status: ${ingestionSummary.map(i => `${i.deviceName}: ${i.status}`).join(', ') || 'N/A'}
+- Controls (${controlsSummary.length}): ${JSON.stringify(controlsSummary)}
 
 ANALYSIS REQUIREMENTS:
         1. Determine overall compliance status: Compliant, NeedsReview, or NonCompliant
