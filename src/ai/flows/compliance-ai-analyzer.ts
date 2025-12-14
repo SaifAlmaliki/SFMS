@@ -16,6 +16,7 @@ const ComplianceAIInputSchema = z.object({
   controlId: z.string().optional().describe('Specific control ID to analyze'),
   deviceId: z.string().optional().describe('Specific device to analyze'),
   analysisType: z.enum(['full', 'control', 'device']).default('full').describe('Type of analysis to perform'),
+  liveData: z.any().optional().describe('Pre-fetched live FortiGate data (to avoid redundant API calls)'),
 });
 
 export type ComplianceAIInput = z.infer<typeof ComplianceAIInputSchema>;
@@ -45,8 +46,9 @@ export type ComplianceAIOutput = z.infer<typeof ComplianceAIOutputSchema>;
 
 /**
  * Fetch REAL-TIME data from FortiGate API for compliance analysis
+ * Always fetches fresh data - no caching to ensure up-to-date status
  */
-async function fetchLiveFortiGateData(deviceId?: string) {
+export async function fetchLiveFortiGateData(deviceId?: string) {
   // Get active FortiGate devices from database
   const devices = await prisma.device.findMany({
     where: {
@@ -221,9 +223,21 @@ async function fetchLiveFortiGateData(deviceId?: string) {
 }
 
 /**
- * Get relevant data for AI analysis - combines live FortiGate data with compliance framework info
+ * Type for live FortiGate data structure
+ * Defined after fetchLiveFortiGateData to avoid forward reference
  */
-async function getComplianceContext(frameworkName: string, controlId?: string, deviceId?: string) {
+export type LiveFortiGateData = Awaited<ReturnType<typeof fetchLiveFortiGateData>>;
+
+/**
+ * Get relevant data for AI analysis - combines live FortiGate data with compliance framework info
+ * @param liveData - Pre-fetched live data (if provided, skips fetching)
+ */
+async function getComplianceContext(
+  frameworkName: string, 
+  controlId?: string, 
+  deviceId?: string,
+  liveData?: LiveFortiGateData
+) {
   const framework = await prisma.complianceFramework.findFirst({
     where: { name: frameworkName },
     include: {
@@ -234,13 +248,13 @@ async function getComplianceContext(frameworkName: string, controlId?: string, d
     }
   });
 
-  // Fetch REAL-TIME data from FortiGate API
-  const liveData = await fetchLiveFortiGateData(deviceId);
+  // Use provided live data or fetch fresh if not provided
+  const fortiGateData = liveData || await fetchLiveFortiGateData(deviceId);
 
   return {
     framework,
-    liveData,
-    deviceCount: liveData.devices.length
+    liveData: fortiGateData,
+    deviceCount: fortiGateData.devices.length
   };
 }
 
@@ -298,17 +312,17 @@ export const analyzeComplianceWithAI = ai.defineFlow(
     outputSchema: ComplianceAIOutputSchema,
   },
   async (input) => {
-    const { frameworkName, controlId, deviceId, analysisType } = input;
+    const { frameworkName, controlId, deviceId, analysisType, liveData } = input as typeof input & { liveData?: any };
 
-    // Get compliance context data
-    const context = await getComplianceContext(frameworkName, controlId, deviceId);
+    // Get compliance context data (use provided liveData if available)
+    const context = await getComplianceContext(frameworkName, controlId, deviceId, liveData);
     
     if (!context.framework) {
       throw new Error(`Framework ${frameworkName} not found`);
     }
 
     // Use LIVE data from FortiGate API
-    const liveData = context.liveData;
+    const fortiGateData = context.liveData;
     
     // Summarize framework controls
     const controlsSummary = context.framework.controls?.map((c: any) => ({
@@ -321,8 +335,8 @@ export const analyzeComplianceWithAI = ai.defineFlow(
 
     // Generate AI analysis with REAL-TIME FortiGate data
     console.log('[Compliance AI] Starting AI generation for framework:', frameworkName);
-    console.log('[Compliance AI] Live devices:', liveData.devices.map((d: any) => d.name).join(', '));
-    console.log('[Compliance AI] Firewall policies count:', liveData.firewallPolicies.reduce((sum: number, d: any) => sum + d.count, 0));
+    console.log('[Compliance AI] Live devices:', fortiGateData.devices.map((d: any) => d.name).join(', '));
+    console.log('[Compliance AI] Firewall policies count:', fortiGateData.firewallPolicies.reduce((sum: number, d: any) => sum + d.count, 0));
     
     let response;
     try {
@@ -333,14 +347,14 @@ export const analyzeComplianceWithAI = ai.defineFlow(
 ${frameworkPrompt}
 
 REAL-TIME FORTIGATE DATA:
-- Connected Devices (${liveData.devices.length}): ${JSON.stringify(liveData.devices)}
-- System Status: ${JSON.stringify(liveData.systemStatus)}
-- Global Config: ${JSON.stringify(liveData.globalConfig)}
-- Resource Usage: ${JSON.stringify(liveData.resourceUsage)}
-- Firewall Policies: ${JSON.stringify(liveData.firewallPolicies.map((d: any) => ({ device: d.device, count: d.count, policies: d.policies?.slice(0, 5) })))}
-- Active Sessions: ${JSON.stringify(liveData.firewallSessions)}
-- License Status: ${JSON.stringify(liveData.licenseStatus)}
-- Connection Errors: ${liveData.errors.length > 0 ? liveData.errors.join('; ') : 'None'}
+- Connected Devices (${fortiGateData.devices.length}): ${fortiGateData.devices.map((d: any) => `${d.name} (${d.ip})`).join(', ')}
+- System Status: ${fortiGateData.systemStatus.length > 0 ? `Uptime: ${fortiGateData.systemStatus[0]?.uptime || 'N/A'}, Version: ${fortiGateData.systemStatus[0]?.version || 'N/A'}` : 'N/A'}
+- Global Config: ${fortiGateData.globalConfig.length > 0 ? `Hostname: ${fortiGateData.globalConfig[0]?.hostname}, Timezone: ${fortiGateData.globalConfig[0]?.timezone}, SSL Min: ${fortiGateData.globalConfig[0]?.ssl_min_proto_version || 'N/A'}` : 'N/A'}
+- Resource Usage: ${fortiGateData.resourceUsage.length > 0 ? `CPU: ${fortiGateData.resourceUsage[0]?.cpu || 'N/A'}%, Memory: ${fortiGateData.resourceUsage[0]?.memory || 'N/A'}%` : 'N/A'}
+- Firewall Policies: ${fortiGateData.firewallPolicies.reduce((sum: number, d: any) => sum + d.count, 0)} total policies across ${fortiGateData.firewallPolicies.length} device(s). Sample: ${JSON.stringify(fortiGateData.firewallPolicies[0]?.policies?.slice(0, 3) || [])}
+- Active Sessions: ${fortiGateData.firewallSessions.reduce((sum: number, d: any) => sum + (d.totalSessions || 0), 0)} total active sessions
+- License Status: ${fortiGateData.licenseStatus.length > 0 ? `Status: ${fortiGateData.licenseStatus[0]?.status || 'N/A'}` : 'N/A'}
+- Connection Errors: ${fortiGateData.errors.length > 0 ? fortiGateData.errors.join('; ') : 'None'}
 
 COMPLIANCE CONTROLS:
 - Framework: ${context.framework.name}
@@ -573,16 +587,19 @@ function generateFallbackResponse(
 
 /**
  * Simplified function for direct use in compliance evaluator
+ * @param liveData - Pre-fetched live data (optional, will fetch if not provided)
  */
 export async function getAIComplianceInsights(
   frameworkName: string, 
   controlId?: string, 
-  deviceId?: string
+  deviceId?: string,
+  liveData?: LiveFortiGateData
 ): Promise<ComplianceAIOutput> {
   return await analyzeComplianceWithAI({
     frameworkName,
     controlId,
     deviceId,
-    analysisType: controlId ? 'control' : 'full'
+    analysisType: controlId ? 'control' : 'full',
+    liveData
   });
 }

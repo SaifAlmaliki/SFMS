@@ -155,56 +155,61 @@ export async function getSnapshots() {
 }
 
 export async function getComplianceReports() {
-    const frameworks = await prisma.complianceFramework.findMany({
-        include: {
-            controls: {
-                include: {
-                    results: {
-                        orderBy: { evaluatedAt: 'desc' },
-                        take: 1
+    try {
+        const frameworks = await prisma.complianceFramework.findMany({
+            include: {
+                controls: {
+                    include: {
+                        results: {
+                            orderBy: { evaluatedAt: 'desc' },
+                            take: 1
+                        }
                     }
-                }
-            },
-            evaluations: true
-        }
-    });
-    
-    return frameworks.map(framework => {
-        // Use live evaluation data if available, otherwise fall back to static data
-        const liveEvaluation = framework.evaluations;
-        const status = liveEvaluation 
-            ? (liveEvaluation.status === 'NeedsReview' ? 'Needs Review' : 
-               liveEvaluation.status === 'NonCompliant' ? 'Non-Compliant' : 'Compliant')
-            : (framework.status === 'NeedsReview' ? 'Needs Review' : 
-               framework.status === 'NonCompliant' ? 'Non-Compliant' : 'Compliant');
+                },
+                evaluations: true
+            }
+        });
         
-        const lastAudit = liveEvaluation 
-            ? liveEvaluation.lastAudit.toISOString().split('T')[0]
-            : framework.lastAudit.toISOString().split('T')[0];
+        return frameworks.map(framework => {
+            // Use live evaluation data if available, otherwise fall back to static data
+            const liveEvaluation = framework.evaluations;
+            const status = liveEvaluation 
+                ? (liveEvaluation.status === 'NeedsReview' ? 'Needs Review' : 
+                   liveEvaluation.status === 'NonCompliant' ? 'Non-Compliant' : 'Compliant')
+                : (framework.status === 'NeedsReview' ? 'Needs Review' : 
+                   framework.status === 'NonCompliant' ? 'Non-Compliant' : 'Compliant');
             
-        const coverage = liveEvaluation ? liveEvaluation.coverage : framework.coverage;
+            const lastAudit = liveEvaluation && liveEvaluation.lastAudit
+                ? liveEvaluation.lastAudit.toISOString().split('T')[0]
+                : framework.lastAudit ? framework.lastAudit.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+                
+            const coverage = liveEvaluation ? liveEvaluation.coverage : (framework.coverage || 0);
 
-        return {
-            framework: framework.name,
-            status,
-            lastAudit,
-            coverage,
-            controls: framework.controls.map(control => {
-                const latestResult = control.results[0];
-                return {
-                    id: control.controlId,
-                    description: control.description,
-                    status: latestResult 
-                        ? (latestResult.status === 'NeedsReview' ? 'Needs Review' : 
-                           latestResult.status === 'NonCompliant' ? 'Non-Compliant' : 'Compliant')
-                        : (control.status === 'NeedsReview' ? 'Needs Review' : 
-                           control.status === 'NonCompliant' ? 'Non-Compliant' : 'Compliant'),
-                    lastEvaluated: latestResult?.evaluatedAt.toISOString().split('T')[0],
-                    details: latestResult?.details
-                };
-            })
-        };
-    });
+            return {
+                framework: framework.name,
+                status,
+                lastAudit,
+                coverage,
+                controls: (framework.controls || []).map(control => {
+                    const latestResult = control.results?.[0];
+                    return {
+                        id: control.controlId,
+                        description: control.description || '',
+                        status: latestResult 
+                            ? (latestResult.status === 'NeedsReview' ? 'Needs Review' : 
+                               latestResult.status === 'NonCompliant' ? 'Non-Compliant' : 'Compliant')
+                            : (control.status === 'NeedsReview' ? 'Needs Review' : 
+                               control.status === 'NonCompliant' ? 'Non-Compliant' : 'Compliant'),
+                        lastEvaluated: latestResult?.evaluatedAt?.toISOString().split('T')[0] || null,
+                        details: latestResult?.details || null
+                    };
+                })
+            };
+        });
+    } catch (error: any) {
+        console.error('Error in getComplianceReports:', error);
+        throw error;
+    }
 }
 
 export async function getComplianceReportByFramework(framework: string) {

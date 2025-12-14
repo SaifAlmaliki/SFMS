@@ -5,9 +5,36 @@
 
 import 'server-only';
 import { PrismaClient } from '../../generated/prisma';
-import { getAIComplianceInsights, type ComplianceAIOutput } from '@/ai/flows/compliance-ai-analyzer';
+import { 
+  getAIComplianceInsights, 
+  type ComplianceAIOutput, 
+  fetchLiveFortiGateData,
+  type LiveFortiGateData 
+} from '@/ai/flows/compliance-ai-analyzer';
 
 const prisma = new PrismaClient();
+
+/**
+ * Calculate overall compliance status from control results
+ */
+function calculateOverallStatus(controlResults: EvaluationResult[]): 'Compliant' | 'NeedsReview' | 'NonCompliant' {
+  if (controlResults.some(r => r.status === 'NonCompliant')) {
+    return 'NonCompliant';
+  }
+  if (controlResults.some(r => r.status === 'NeedsReview')) {
+    return 'NeedsReview';
+  }
+  return 'Compliant';
+}
+
+/**
+ * Calculate coverage percentage from control results
+ */
+function calculateCoverage(controlResults: EvaluationResult[]): number {
+  if (controlResults.length === 0) return 0;
+  const compliantCount = controlResults.filter(r => r.status === 'Compliant').length;
+  return Math.round((compliantCount / controlResults.length) * 100);
+}
 
 export interface EvaluationResult {
   controlId: string;
@@ -347,57 +374,74 @@ export async function evaluateControl(
     return await control.evaluate();
   } catch (error: any) {
     console.error(`Error evaluating control ${controlId}:`, error);
-    return {
-      controlId,
-      frameworkId: frameworkName,
-      status: 'NeedsReview',
-      details: `Evaluation error: ${error.message}`,
-      evidenceRefs: []
-    };
+    return createErrorResult(controlId, frameworkName, error.message);
+  }
+}
+
+/**
+ * Create an error result for failed control evaluation
+ */
+function createErrorResult(
+  controlId: string, 
+  frameworkId: string, 
+  errorMessage: string
+): EvaluationResult {
+  return {
+    controlId,
+    frameworkId,
+    status: 'NeedsReview',
+    details: `Evaluation error: ${errorMessage}`,
+    evidenceRefs: []
+  };
+}
+
+/**
+ * Get AI insights with error handling (non-blocking)
+ */
+async function getAIInsightsSafely(
+  frameworkName: string, 
+  liveData?: LiveFortiGateData
+): Promise<ComplianceAIOutput | undefined> {
+  try {
+    console.log(`Attempting to get AI insights for ${frameworkName}...`);
+    const insights = await getAIComplianceInsights(frameworkName, undefined, undefined, liveData);
+    console.log(`✓ AI insights generated for ${frameworkName}`);
+    return insights;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`⚠️ AI insights unavailable for ${frameworkName}:`, message);
+    return undefined; // Non-blocking failure
   }
 }
 
 /**
  * Evaluate all controls for a framework
+ * @param liveData - Pre-fetched live FortiGate data (optional, will fetch if not provided)
  */
-export async function evaluateFramework(frameworkName: string): Promise<FrameworkEvaluationResult> {
+export async function evaluateFramework(
+  frameworkName: string,
+  liveData?: LiveFortiGateData
+): Promise<FrameworkEvaluationResult> {
   const framework = COMPLIANCE_RULES[frameworkName as keyof typeof COMPLIANCE_RULES];
   if (!framework) {
     throw new Error(`Unknown framework: ${frameworkName}`);
   }
 
-  const controlResults: EvaluationResult[] = [];
+  // Evaluate all controls in parallel
+  const controlIds = Object.keys(framework);
+  const controlPromises = controlIds.map(controlId => 
+    evaluateControl(frameworkName, controlId)
+  );
   
-  for (const controlId of Object.keys(framework)) {
-    const result = await evaluateControl(frameworkName, controlId);
-    if (result) {
-      controlResults.push(result);
-    }
-  }
+  const controlResults = (await Promise.all(controlPromises))
+    .filter((result): result is EvaluationResult => result !== null);
 
-  // Calculate overall framework status and coverage
-  const compliantCount = controlResults.filter(r => r.status === 'Compliant').length;
-  const totalControls = controlResults.length;
-  const coverage = totalControls > 0 ? Math.round((compliantCount / totalControls) * 100) : 0;
+  // Calculate status and coverage using helper functions
+  const overallStatus = calculateOverallStatus(controlResults);
+  const coverage = calculateCoverage(controlResults);
 
-  let overallStatus: 'Compliant' | 'NeedsReview' | 'NonCompliant' = 'Compliant';
-  if (controlResults.some(r => r.status === 'NonCompliant')) {
-    overallStatus = 'NonCompliant';
-  } else if (controlResults.some(r => r.status === 'NeedsReview')) {
-    overallStatus = 'NeedsReview';
-  }
-
-  // Get AI insights for the framework (optional - don't fail if AI is unavailable)
-  let aiInsights: ComplianceAIOutput | undefined;
-  try {
-    console.log(`Attempting to get AI insights for ${frameworkName}...`);
-    aiInsights = await getAIComplianceInsights(frameworkName);
-    console.log(`✓ AI insights generated for ${frameworkName}`);
-  } catch (error) {
-    console.warn(`⚠️ AI insights unavailable for ${frameworkName}:`, error instanceof Error ? error.message : error);
-    // Continue without AI insights - this is not a critical failure
-    aiInsights = undefined;
-  }
+  // Get AI insights (non-blocking)
+  const aiInsights = await getAIInsightsSafely(frameworkName, liveData);
 
   return {
     frameworkId: frameworkName,
@@ -432,76 +476,101 @@ export async function runComplianceEvaluation(): Promise<{
   });
 
   try {
-    // Get all frameworks from database
+    // STEP 1: Collect ALL firewall data FIRST (before any evaluation)
+    console.log('[Evaluator] Step 1: Collecting all firewall data...');
+    const liveData = await fetchLiveFortiGateData();
+    console.log(`[Evaluator] ✓ Collected data from ${liveData.devices.length} device(s)`);
+
+    // STEP 2: Get all frameworks from database
     const frameworks = await prisma.complianceFramework.findMany({
       include: { controls: true }
     });
 
-    for (const framework of frameworks) {
-      try {
-        const result = await evaluateFramework(framework.name);
-        frameworksEvaluated++;
-        
-        // Store AI insights for this framework
-        if (result.aiInsights) {
-          aiInsights[framework.name] = result.aiInsights;
+    // STEP 3: Evaluate all frameworks in parallel using the pre-collected data
+    console.log(`[Evaluator] Step 2: Evaluating ${frameworks.length} framework(s) in parallel...`);
+    const frameworkResults = await Promise.all(
+      frameworks.map(async (framework) => {
+        try {
+          const result = await evaluateFramework(framework.name, liveData);
+          return { framework, result, success: true as const, error: null };
+        } catch (error: any) {
+          return { 
+            framework, 
+            result: null, 
+            success: false as const, 
+            error: error.message 
+          };
         }
+      })
+    );
 
-        // Update framework status with AI insights
-        const aiData = result.aiInsights ? {
-          aiRiskScore: result.aiInsights.riskScore,
-          aiSummary: result.aiInsights.aiSummary,
-          aiKeyFindings: result.aiInsights.keyFindings,
-          aiViolations: result.aiInsights.violations,
-          aiRecommendations: result.aiInsights.recommendations,
-          aiNextSteps: result.aiInsights.nextSteps,
-          aiAnalyzedAt: new Date()
-        } : {};
+    // Process results and store in database
+    for (const { framework, result, success, error } of frameworkResults) {
+      if (!success || !result) {
+        errors.push(`Framework ${framework.name}: ${error || 'Evaluation failed'}`);
+        continue;
+      }
 
-        await prisma.complianceFrameworkStatus.upsert({
-          where: { frameworkId: framework.id },
-          update: {
-            status: result.status,
-            coverage: result.coverage,
-            lastAudit: new Date(),
-            notes: `Evaluated ${result.controlResults.length} controls`,
-            ...aiData
-          },
-          create: {
-            frameworkId: framework.id,
-            status: result.status,
-            coverage: result.coverage,
-            lastAudit: new Date(),
-            notes: `Initial evaluation of ${result.controlResults.length} controls`,
-            ...aiData
-          }
-        });
-        
-        if (result.aiInsights) {
-          console.log(`[Evaluator] Saved AI insights for ${framework.name}`);
+      frameworksEvaluated++;
+      
+      // Store AI insights
+      if (result.aiInsights) {
+        aiInsights[framework.name] = result.aiInsights;
+      }
+
+      // Prepare AI data for database
+      const aiData = result.aiInsights ? {
+        aiRiskScore: result.aiInsights.riskScore,
+        aiSummary: result.aiInsights.aiSummary,
+        aiKeyFindings: result.aiInsights.keyFindings,
+        aiViolations: result.aiInsights.violations,
+        aiRecommendations: result.aiInsights.recommendations,
+        aiNextSteps: result.aiInsights.nextSteps,
+        aiAnalyzedAt: new Date()
+      } : {};
+
+      // Update framework status
+      await prisma.complianceFrameworkStatus.upsert({
+        where: { frameworkId: framework.id },
+        update: {
+          status: result.status,
+          coverage: result.coverage,
+          lastAudit: new Date(),
+          notes: `Evaluated ${result.controlResults.length} controls`,
+          ...aiData
+        },
+        create: {
+          frameworkId: framework.id,
+          status: result.status,
+          coverage: result.coverage,
+          lastAudit: new Date(),
+          notes: `Initial evaluation of ${result.controlResults.length} controls`,
+          ...aiData
         }
+      });
 
-        // Store individual control results
-        for (const controlResult of result.controlResults) {
+      // Batch insert control results
+      const controlResultsToInsert = result.controlResults
+        .map(controlResult => {
           const control = framework.controls.find(c => c.controlId === controlResult.controlId);
-          if (control) {
-            await prisma.complianceControlResult.create({
-              data: {
-                controlRecordId: control.id,
-                frameworkId: framework.id,
-                status: controlResult.status,
-                score: controlResult.score,
-                evidenceRefs: controlResult.evidenceRefs,
-                details: controlResult.details,
-                evaluationRunId: evaluationRun.id
-              }
-            });
-            controlsEvaluated++;
-          }
-        }
+          return control ? {
+            controlRecordId: control.id,
+            frameworkId: framework.id,
+            status: controlResult.status,
+            score: controlResult.score,
+            evidenceRefs: controlResult.evidenceRefs,
+            details: controlResult.details,
+            evaluationRunId: evaluationRun.id
+          } : null;
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null);
 
-      } catch (error: any) {
-        errors.push(`Framework ${framework.name}: ${error.message}`);
+      if (controlResultsToInsert.length > 0) {
+        await prisma.complianceControlResult.createMany({
+          data: controlResultsToInsert,
+          skipDuplicates: true
+        });
+        controlsEvaluated += controlResultsToInsert.length;
       }
     }
 
